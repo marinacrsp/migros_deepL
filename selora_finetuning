@@ -20,7 +20,7 @@ from PIL import Image
 
 import numpy as np
 import pandas as pd
-
+from sklearn.model_selection import train_test_split
 
 ##### Setting Random Seed
 DEFAULT_RANDOM_SEED = 42
@@ -405,7 +405,7 @@ class ImageDataset(Dataset):
 
         return example
 
-from sklearn.model_selection import train_test_split
+
 
 # reports = reports[['File_name', 'text']]
 metadata = pd.read_csv(reports_path)

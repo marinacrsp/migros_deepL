@@ -1,12 +1,14 @@
 #!/bin/bash
 #SBATCH  --output=output/logs/%j.out
-#SBATCH  --ntasks=1
-#SBATCH  --mem-per-cpu=8G
-#SBATCH  --cpus-per-task=1
-#SBATCH  --gpus-per-node=1
+#SBATCH  --account=dl_jobs
 
 # Load Conda
-source /cluster/home/mcrespo/project_deepL/selora_env/bin/activate
+
+module add cuda/12.1
+
+source /home/mcrespo/miniconda3/etc/profile.d/conda.sh
+conda activate /home/mcrespo/miniconda3/envs/sel_py11
+nvcc --version
 
 # python selora_finetuning
 python selora_finetuning
