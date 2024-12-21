@@ -11,4 +11,4 @@ conda activate /home/mcrespo/miniconda3/envs/sel_py11
 nvcc --version
 
 # python selora_finetuning
-python selora_finetuning
+python selora_finetuning.py
