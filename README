@@ -1,0 +1,9 @@
+#### Commands to run on cluster:
+
+sbatch experiment.sh
+
+## To see how the training is going:
+squeue --me
+
+
+### Modify all necessary directories in selora_finetuning.py accordingly

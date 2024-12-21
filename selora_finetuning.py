@@ -89,7 +89,7 @@ LR = 1e-4
 
 ##############################################################
 # The main path
-Main_Path = '/cluster/home/mcrespo/project_deepL'
+Main_Path = '~/migros_deepL'
 # The datasets path under the main path
 Data_storage = Main_Path + '/BraTS2021_train/Flair'
 save_result_path = Main_Path + '/selora_outputs'
