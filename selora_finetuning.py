@@ -341,10 +341,10 @@ def set_Linear_SeLoRA(model, target_modules):
             )
             ### Keeping the original weights frozen
             LoRA_layer.weight = layer.weight
-            LoRA_layer.weight.requires_grad = True
+            LoRA_layer.weight.requires_grad = False
             LoRA_layer.bias = layer.bias
             if LoRA_layer.bias != None:
-                LoRA_layer.bias.requires_grad = True
+                LoRA_layer.bias.requires_grad = False
 
             pointing_layer = model
             if len(target_modules) != 0:
