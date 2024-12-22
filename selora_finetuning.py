@@ -95,8 +95,8 @@ LR = 1e-4
 # The main path
 Main_Path = '/home/mcrespo/migros_deepL'
 # The datasets path under the main path
-Data_storage = Main_Path + '/BraTS2021_train/Flair'
-save_result_path = Main_Path + '/selora_outputs'
+Data_storage = Main_Path + '/braTS2021_train'
+save_result_path = Main_Path + '/selora_outputs_2'
 reports_path = Data_storage + '/metadata.csv'
 ### folder to save the result.
 folder_name = 'loras'
@@ -110,15 +110,18 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 model_id = "runwayml/stable-diffusion-v1-5"
 
-UNET_TARGET_MODULES = [
-    "to_q", "to_k", "to_v",
-    "proj", "proj_in", "proj_out",
-    "conv", "conv1", "conv2",
-    "conv_shortcut", "to_out.0", "time_emb_proj", "ff.net.2",
-]
+# UNET_TARGET_MODULES = [
+#     "to_q", "to_k", "to_v",
+#     "proj", "proj_in", "proj_out",
+#     "conv", "conv1", "conv2",
+#     "conv_shortcut", "to_out.0", "time_emb_proj", "ff.net.2",
+# ]
 
 
-TEXT_ENCODER_TARGET_MODULES = ["fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"]
+# TEXT_ENCODER_TARGET_MODULES = ["fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"]
+
+UNET_TARGET_MODULES = ["to_v"]
+TEXT_ENCODER_TARGET_MODULES = ["v_proj"]
 
 pipe = StableDiffusionPipeline.from_pretrained(model_id)
 
@@ -340,42 +343,96 @@ unet = unet.requires_grad_(False)
 
 def set_Linear_SeLoRA(model, target_modules):
      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
+
     for name, layer in model.named_modules():
+        
         if isinstance(layer, nn.Linear):
 
-            LoRA_layer = Linear(
-                  in_features = layer.in_features,
-                  out_features = layer.out_features,
-                  r = 1
-            )
-            LoRA_layer.weight = layer.weight
-            LoRA_layer.weight.requires_grad = False
-            LoRA_layer.bias = layer.bias
-            if LoRA_layer.bias != None:
-                LoRA_layer.bias.requires_grad = False
+            if name.split('.')[-1] in target_modules: # NOTE: Check if the name of current layer is contained in the target modules
 
-            pointing_layer = model
-            if len(target_modules) != 0:
-                if name.split('.')[-1] in target_modules:
+                print(f"Replacing layer {name.split('.')[-1]} in {layer}")
+                LoRA_layer = Linear(
+                    in_features = layer.in_features,
+                    out_features = layer.out_features,
+                    r = 4
+                )
+                LoRA_layer.weight = layer.weight
+                LoRA_layer.weight.requires_grad = True
+                LoRA_layer.bias = layer.bias
+
+                if LoRA_layer.bias != None:
+                    LoRA_layer.bias.requires_grad = True
+
+                pointing_layer = model
+
+                if name.split('.')[-1] in target_modules: 
+
                     for layer_name in name.split('.')[:-1]:
                         pointing_layer = getattr(pointing_layer, layer_name)
-            else:
-                for layer_name in name.split('.')[:-1]:
-                        pointing_layer = getattr(pointing_layer, layer_name)
 
-                setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
     return model
 
+# def set_Linear_SeLoRA(model, target_modules):
+#      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
+#     for name, layer in model.named_modules():
+#         if isinstance(layer, nn.Linear):
 
-# unet_lora = unet
+#             LoRA_layer = Linear(
+#                   in_features = layer.in_features,
+#                   out_features = layer.out_features,
+#                   r = 1
+#             )
+
+#             LoRA_layer.weight = layer.weight
+#             LoRA_layer.weight.requires_grad = False
+#             LoRA_layer.bias = layer.bias
+#             if LoRA_layer.bias != None:
+#                 LoRA_layer.bias.requires_grad = False
+
+#             pointing_layer = model
+#             if len(target_modules) != len(None):
+#                 if name.split('.')[-1] in target_modules:
+#                     for layer_name in name.split('.')[:-1]:
+#                         pointing_layer = getattr(pointing_layer, layer_name)
+#             else:
+#                 for layer_name in name.split('.')[:-1]:
+#                         pointing_layer = getattr(pointing_layer, layer_name)
+
+#                 setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
+#     return model
+
+# def set_Linear_SeLoRA(model, target_modules):
+#     # Replace all linear layers into LoRA layers
+#     for name, layer in model.named_modules():
+#         if isinstance(layer, nn.Linear):
+#             print(f"Checking layer {name} for inclusion in target_modules...")
+#             if len(target_modules) != 0 or name.split('.')[-1] in target_modules:
+#                 print(f"Layer {name} added to LoRA replacement")
+
+#                 LoRA_layer = Linear(
+#                     in_features=layer.in_features,
+#                     out_features=layer.out_features,
+#                     r=1
+#                 )
+#                 LoRA_layer.weight = layer.weight
+#                 LoRA_layer.weight.requires_grad = True
+#                 LoRA_layer.bias = layer.bias
+#                 if LoRA_layer.bias is not None:
+#                     LoRA_layer.bias.requires_grad = True
+
+#                 pointing_layer = model
+#                 for layer_name in name.split('.')[:-1]:
+#                     pointing_layer = getattr(pointing_layer, layer_name)
+
+#                 # Replace the layer
+#                 setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
+#                 print(f"Replaced {name} with LoRA layer")
+#     return model
+
 unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES)
-print(f"Unet before loras: {unet}")
-
-print(f"Unet after loras: {unet_lora}")
 text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES)
-print(f"Unet before loras: {text_encoder}")
 
-print(f"Unet after loras: {text_encoder_lora}")
+
 ### Print the parameters in the Unet and Text encoder that will be trained
 print_trainable_parameters(text_encoder_lora)
 print_trainable_parameters(unet_lora)
@@ -443,9 +500,8 @@ test_ds = ImageDataset(
     df=test_df,
     tokenizer=tokenizer,
 )
-
-num_workers = os.cpu_count()
-
+print(f'n of working cpus: {os.cpu_count()}')
+num_workers = 2
 # DataLoader initialization
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers = num_workers)
 valid_loader = DataLoader(valid_ds, batch_size=BATCH_SIZE // 2, shuffle=False, num_workers = num_workers)
@@ -455,7 +511,6 @@ optimizer = torch.optim.Adam(list(unet_lora.parameters()) + list(text_encoder_lo
 
 """# Training"""
 
-import pandas as pd
 from tqdm.notebook import tqdm
 from IPython.display import display
 import copy
@@ -624,7 +679,6 @@ class Trainer:
 
                 loss.backward()
 
-
                 recorded_loss.append(loss.item())
 
                 pbar.set_description(f"[Loss: {recorded_loss[-1]:.3f}/{np.mean(recorded_loss):.3f}]")
@@ -632,33 +686,34 @@ class Trainer:
                 self.optimizer.step()
 
                 self.total_step += 1
+
                 #######################################################################
                 # check number of expandable LoRA
                 #######################################################################
                 #### Commenting the expandable lora's 
-                if self.total_step % self.expand_step == 0:
-                    self.model_to_temp(self.unet)
-                    self.model_to_temp(self.text_encoder)
+                # if self.total_step % self.expand_step == 0:
+                #     self.model_to_temp(self.unet)
+                #     self.model_to_temp(self.text_encoder)
 
-                    # Get the text embedding for conditioning
-                    encoder_hidden_states = self.text_encoder(pormpt_idxs)[0]
-                    # Predict the noise residual
-                    model_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
+                #     # Get the text embedding for conditioning
+                #     encoder_hidden_states = self.text_encoder(pormpt_idxs)[0]
+                #     # Predict the noise residual
+                #     model_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                    loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+                #     loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                    self.optimizer.zero_grad()
+                #     self.optimizer.zero_grad()
 
-                    loss.backward()
-
-
-                    self.display_line = ''
-                    self.Expandable_LoRA(self.unet)
-                    self.Expandable_LoRA(self.text_encoder)
+                #     loss.backward()
 
 
-                    self.model_to_temp(self.unet)
-                    self.model_to_temp(self.text_encoder)
+                #     self.display_line = ''
+                #     self.Expandable_LoRA(self.unet)
+                #     self.Expandable_LoRA(self.text_encoder)
+
+
+                #     self.model_to_temp(self.unet)
+                #     self.model_to_temp(self.text_encoder)
 
 
                 ######################################################################
@@ -686,16 +741,16 @@ class Trainer:
 
                     self.result_df.loc[len(self.result_df)] = [epoch, self.total_step, np.round(np.mean(recorded_loss), 4), np.round(valid_rmse, 4), self.added_rank,  self.trainable_percentage(self.unet), self.trainable_percentage(self.text_encoder)]
 
-                    self._display_id.update(self.result_df)
+                    # self._display_id.update(self.result_df)
 
+                    print(self.result_df)
                     recorded_loss = []
 
                 if self.total_step % self.log_period == 0:
 
                     self.result_df.loc[len(self.result_df)] = [epoch, self.total_step, np.round(np.mean(recorded_loss), 4), ' --- ', self.added_rank,  self.trainable_percentage(self.unet), self.trainable_percentage(self.text_encoder)]
 
-                    # self._display_id.update(self.result_df)
-
+                    print(self.result_df)  #
                     self.result_df.to_csv(f'{save_result_path}/{folder_name}/results.csv')
 
 
@@ -711,7 +766,7 @@ trainer = Trainer(
     test_dl = valid_loader,
     total_epoch = 10,
     WEIGHT_DTYPE = WEIGHT_DTYPE,
-    threshould = 1.3,
+    threshould = 11.3,
     per_iter_valid = len(train_loader),
     log_period = 40,
     expand_step = 40,
@@ -723,6 +778,7 @@ trainer.train()
 trainer.result_df.to_csv(f'{save_result_path}/{folder_name}/results.csv')
 
 """# Testing / Inference"""
+print('___________________Testing / Inference phase __________________')
 
 unet_lora.eval()
 text_encoder_lora.eval()
@@ -743,7 +799,7 @@ check_and_make_folder(f'{save_result_path}/{folder_name}')
 check_and_make_folder(f'{save_result_path}/{folder_name}/test_images')
 
 for place in range(len(test_df)):
-    temp_prompts = test_df.findings.iloc[place]
+    temp_prompts = test_df.text.iloc[place]
 
     temp = new_pipe(temp_prompts, height = 224, width = 224).images[0]
 
