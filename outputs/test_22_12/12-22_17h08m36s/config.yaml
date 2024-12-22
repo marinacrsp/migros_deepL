@@ -1,0 +1,19 @@
+main_path: /home/mcrespo/migros_deepL
+output:
+  path: /home/mcrespo/migros_deepL/outputs/test_22_12
+  folder_name: /selora_outputs
+  folder_lora_name: /loras
+dataset:
+  dataset_name: /BraTS2021_train
+  sequence_type: /Flair
+  report_name: /metadata.csv
+default_random_seed: 42
+batch_size: 2
+lr: 0.0001
+model:
+  model_id: runwayml/stable-diffusion-v1-5
+  unet_modules: to_v
+  txt_encoder_modules: v_proj
+  rank: 4
+  expandable: false
+timestamp: 12-22_17h08m36s

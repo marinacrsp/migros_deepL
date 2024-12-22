@@ -22,8 +22,55 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+from config.config_utils import *
+
+
+
+############# Load configuration files #################
+args = parse_args()
+config = load_config(args.config)
+
+
 ##### Setting Random Seed
-DEFAULT_RANDOM_SEED = 42
+DEFAULT_RANDOM_SEED = config["default_random_seed"]
+WEIGHT_DTYPE = torch.float32
+BATCH_SIZE = config["batch_size"]
+LR = config["lr"]
+##############################################################
+# Dataset directory & outputs
+main_path = config["main_path"]
+dataset_name = config["dataset"]["dataset_name"]
+modality = config["dataset"]["sequence_type"]
+
+Data_storage = main_path + dataset_name + modality
+reports_path = Data_storage + config["dataset"]["report_name"]
+
+output_path = config["output"]["path"] + '/' + config["timestamp"]
+output_folder = config["output"]["folder_name"]
+folder_name = config["output"]["folder_lora_name"]
+
+save_result_path = output_path + output_folder
+
+#########################################################
+# The datasets path under the main path
+
+# Data_storage = Main_Path + '/BraTS2021_train/Flair'
+# reports_path = Data_storage + '/metadata.csv'
+
+# Data_storage = Main_Path + '/brats_test'
+
+# save_result_path = storage_path + '/selora_outputs_2'
+
+
+### folder to save the result.
+# folder_name = 'loras'
+##############################################################
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+model_id = config["model"]["model_id"]
+UNET_TARGET_MODULES = [config["model"]["unet_modules"]]
+TEXT_ENCODER_TARGET_MODULES = [config["model"]["txt_encoder_modules"]]
+
+
 
 def seedBasic(seed=DEFAULT_RANDOM_SEED):
     random.seed(seed)
@@ -87,28 +134,13 @@ clear_cache()
 
 """# Hyperparameters and Path"""
 
-WEIGHT_DTYPE = torch.float32
-BATCH_SIZE = 2
-LR = 1e-4
 
-##############################################################
-# The main path
-Main_Path = '/home/mcrespo/migros_deepL'
-# The datasets path under the main path
-Data_storage = Main_Path + '/braTS2021_train'
-save_result_path = Main_Path + '/selora_outputs_2'
-reports_path = Data_storage + '/metadata.csv'
-### folder to save the result.
-folder_name = 'loras'
-##############################################################
 
 # assert not os.path.exists(f'{save_result_path}/{folder_name}'), print('LoRA Experiment Already Run')
-
+check_and_make_folder(f'{save_result_path}')
 check_and_make_folder(f'{save_result_path}/{folder_name}')
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-model_id = "runwayml/stable-diffusion-v1-5"
 
 # UNET_TARGET_MODULES = [
 #     "to_q", "to_k", "to_v",
@@ -120,11 +152,8 @@ model_id = "runwayml/stable-diffusion-v1-5"
 
 # TEXT_ENCODER_TARGET_MODULES = ["fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"]
 
-UNET_TARGET_MODULES = ["to_v"]
-TEXT_ENCODER_TARGET_MODULES = ["v_proj"]
 
 pipe = StableDiffusionPipeline.from_pretrained(model_id)
-
 tokenizer = pipe.tokenizer
 noise_scheduler = pipe.scheduler
 text_encoder = pipe.text_encoder

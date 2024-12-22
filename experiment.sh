@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH  --output=output/logs/%j.out
+#SBATCH  --output=/work/scratch/mcrespo/output/%j.out
 #SBATCH  --account=dl_jobs
 
 # Load Conda
