@@ -47,8 +47,11 @@ def check_and_make_folder(path):
         os.mkdir(path)
 
 def print_trainable_parameters(model):
+
     total_parameter_count = sum([np.prod(p.size()) for p in model.parameters()]) # Computes the total number of layers/ parameters in the layer (weight and bias)
     for name, layer in model.named_modules():
+        # Freeze the temporal expanding matrixes lora_A and lora_B - for trainable parameter computation
+        # They are active at times during the computational graph
         if isinstance(layer, Linear):
             layer.lora_A_temp.requires_grad = False
             layer.lora_B_temp.requires_grad = False
@@ -64,6 +67,7 @@ def print_trainable_parameters(model):
         f"trainable%: {trainable_percentage:.16f}"
     )
 
+    ## Unfreeze it for training purposes
     for name, layer in model.named_modules():
         if isinstance(layer, Linear):
             layer.lora_A_temp.requires_grad = True
@@ -144,6 +148,13 @@ Below Defines the SeLoRA injected linear layer class, shown in `Linear`.
 """
 
 class LoRALayer():
+    """Function that introduces functionality to augment the neural network layers with LoRA parameters
+    arguments:
+    - r: rank
+    - lora_alpha: scaling factor that adjusts the influence of lora matrixes on the weights
+    - lora_dropout: dropout rate for lora specific parameter
+    - merge_weights: determines whether Lora weights should be merged back into original matrixes Wo
+    """
     def __init__(
         self,
         r: int,
@@ -153,13 +164,11 @@ class LoRALayer():
     ):
         self.r = r
         self.lora_alpha = lora_alpha
-        
         # Optional dropout
         if lora_dropout > 0.:
             self.lora_dropout = nn.Dropout(p=lora_dropout)
         else:
             self.lora_dropout = lambda x: x
-            
         # Mark the weight as unmerged
         self.merged = False
         self.merge_weights = merge_weights
@@ -171,10 +180,10 @@ class Linear(nn.Linear, LoRALayer):
         self,
         in_features: int,
         out_features: int,
-        r: int = 4,
-        lora_alpha: int = 8, # Scaling parameter
+        r: int = 0,
+        lora_alpha: int = 8,
         lora_dropout: float = 0.,
-        EMA_factor: float = 0.6, # Exponential moving average
+        EMA_factor: float = 0.6,
         # warmup_step_per_expand:int = 10,
         fan_in_fan_out: bool = False, # Set this to True if the layer to replace stores weight like (fan_in, fan_out)
         merge_weights: bool = True,
@@ -186,19 +195,20 @@ class Linear(nn.Linear, LoRALayer):
 
         self.r = r
         self.fan_in_fan_out = fan_in_fan_out
+
         # Actual trainable parameters
         if r > 0:
-            self.lora_A = nn.Parameter(self.weight.new_zeros((r, in_features), requires_grad=True))
-            self.lora_B = nn.Parameter(self.weight.new_zeros((out_features, r), requires_grad=True))
+            self.lora_A = nn.Parameter(self.weight.new_zeros((r, in_features)))
+            self.lora_B = nn.Parameter(self.weight.new_zeros((out_features, r)))
 
-            self.lora_A_temp = nn.Parameter(self.weight.new_zeros((r + 1, in_features), requires_grad=True))
-            self.lora_B_temp = nn.Parameter(self.weight.new_zeros((out_features, r + 1), requires_grad=True))
+            self.lora_A_temp = nn.Parameter(self.weight.new_zeros((r + 1, in_features)))
+            self.lora_B_temp = nn.Parameter(self.weight.new_zeros((out_features, r + 1)))
 
-            self.use_temp_weight = True
+            self.use_temp_weight = False
 
             self.scaling = self.lora_alpha / self.r
             # Freezing the pre-trained weight matrix
-            self.weight.requires_grad = True
+            self.weight.requires_grad = False
 
             self.recorded_grad = 1
 
@@ -226,8 +236,7 @@ class Linear(nn.Linear, LoRALayer):
         if self.merge_weights and self.merged:
             # Make sure that the weights are not merged
             if self.r > 0:
-                ## Return the original matrix
-                self.weight.data -= T(self.lora_B @ self.lora_A) * self.scaling ## Merged matrix = self.weight.data + T(self.lora_B @ self.lora_A)
+                self.weight.data -= T(self.lora_B @ self.lora_A) * self.scaling
             self.merged = False
 
     def eval(self):
@@ -237,7 +246,7 @@ class Linear(nn.Linear, LoRALayer):
         if self.merge_weights and not self.merged:
             # Merge the weights and mark it
             if self.r > 0:
-                
+
                 self.weight.data += T(self.lora_B @ self.lora_A) * self.scaling
 
             self.merged = True
@@ -247,7 +256,6 @@ class Linear(nn.Linear, LoRALayer):
             return w.T if self.fan_in_fan_out else w
 
         if self.r > 0 and not self.merged:
-            ## Not merging the matrixes (??)
             result = F.linear(x, T(self.weight), bias=self.bias)
 
             if self.r > 0:
@@ -298,13 +306,12 @@ class Linear(nn.Linear, LoRALayer):
     def expand_rank(self, optimizer):
 
         old_lora_A = self.lora_A.data
-        # Remove the old loraA
         remove_param_from_optimizer(optimizer, self.lora_A)
         self.lora_A = nn.Parameter(self.weight.new_zeros((self.lora_A.shape[0] + 1, self.lora_A.shape[1])))
         nn.init.kaiming_uniform_(self.lora_A)
         self.lora_A.data[:-1, :] = old_lora_A
 
-        # Remove the old loraB
+
         old_lora_B = self.lora_B.data
         remove_param_from_optimizer(optimizer, self.lora_B)
         self.lora_B = nn.Parameter(self.weight.new_zeros((self.lora_B.shape[0], self.lora_B.shape[1] + 1)))
@@ -322,7 +329,9 @@ class Linear(nn.Linear, LoRALayer):
         optimizer.add_param_group({'params': self.lora_B})
         optimizer.add_param_group({'params': self.lora_A_temp})
         optimizer.add_param_group({'params': self.lora_B_temp})
+
         return optimizer
+
 
 text_encoder = pipe.text_encoder
 text_encoder = text_encoder.requires_grad_(False)
@@ -333,13 +342,12 @@ def set_Linear_SeLoRA(model, target_modules):
      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
     for name, layer in model.named_modules():
         if isinstance(layer, nn.Linear):
-            ## Create a LoRA layer
+
             LoRA_layer = Linear(
                   in_features = layer.in_features,
                   out_features = layer.out_features,
                   r = 1
             )
-            ### Keeping the original weights frozen
             LoRA_layer.weight = layer.weight
             LoRA_layer.weight.requires_grad = False
             LoRA_layer.bias = layer.bias
@@ -349,21 +357,25 @@ def set_Linear_SeLoRA(model, target_modules):
             pointing_layer = model
             if len(target_modules) != 0:
                 if name.split('.')[-1] in target_modules:
-                    for layer_name in name.split('.')[:-1]: # Navigating through the target module layers checking if it's contained
+                    for layer_name in name.split('.')[:-1]:
                         pointing_layer = getattr(pointing_layer, layer_name)
-                     # After the loop finishes, the pointing_layer variable will reference the parent module that directly contains the layer to be replaced
             else:
                 for layer_name in name.split('.')[:-1]:
                         pointing_layer = getattr(pointing_layer, layer_name)
 
-                setattr(pointing_layer, name.split('.')[-1], LoRA_layer) 
+                setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
     return model
 
 
 # unet_lora = unet
 unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES)
-text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES)
+print(f"Unet before loras: {unet}")
 
+print(f"Unet after loras: {unet_lora}")
+text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES)
+print(f"Unet before loras: {text_encoder}")
+
+print(f"Unet after loras: {text_encoder_lora}")
 ### Print the parameters in the Unet and Text encoder that will be trained
 print_trainable_parameters(text_encoder_lora)
 print_trainable_parameters(unet_lora)
@@ -490,9 +502,6 @@ class Trainer:
                     
         print(self.rank_display_id)
         # self.rank_display_id.update(self.display_line)
-
-
-
 
 
     def valid(self):
