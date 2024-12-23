@@ -38,33 +38,25 @@ BATCH_SIZE = config["batch_size"]
 LR = config["lr"]
 ##############################################################
 # Dataset directory & outputs
-main_path = config["main_path"]
+main_path = config["dataset"]["main_path"]
 dataset_name = config["dataset"]["dataset_name"]
 modality = config["dataset"]["sequence_type"]
 
+## Load the datasets directory and reports path
 Data_storage = main_path + dataset_name + modality
 reports_path = Data_storage + config["dataset"]["report_name"]
 
+## Load the output directory and folder_name, where the results will be printed
 output_path = config["output"]["path"] + '/' + config["timestamp"]
 output_folder = config["output"]["folder_name"]
 folder_name = config["output"]["folder_lora_name"]
 
 save_result_path = output_path + output_folder
 
+
+print(f'{main_path}, \n {output_path}, \n {save_result_path}')
 #########################################################
-# The datasets path under the main path
 
-# Data_storage = Main_Path + '/BraTS2021_train/Flair'
-# reports_path = Data_storage + '/metadata.csv'
-
-# Data_storage = Main_Path + '/brats_test'
-
-# save_result_path = storage_path + '/selora_outputs_2'
-
-
-### folder to save the result.
-# folder_name = 'loras'
-##############################################################
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model_id = config["model"]["model_id"]
 UNET_TARGET_MODULES = [config["model"]["unet_modules"]]
@@ -508,8 +500,8 @@ class ImageDataset(Dataset):
 # reports = reports[['File_name', 'text']]
 metadata = pd.read_csv(reports_path)
 # Split the data into train, validation, and test sets
-train_df, temp_df = train_test_split(metadata, test_size=0.2, random_state=42)
-valid_df, test_df = train_test_split(temp_df, test_size=0.2, random_state=42)
+train_df, temp_df = train_test_split(metadata, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
+valid_df, test_df = train_test_split(temp_df, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
 
 # ImageDataset initialization
 train_ds = ImageDataset(
@@ -693,7 +685,6 @@ class Trainer:
                 # Add noise to the latents according to the noise magnitude at each timestep
                 # (this is the forward diffusion process)
                 noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
-
 
                 # Get the text embedding for conditioning
                 encoder_hidden_states = self.text_encoder(pormpt_idxs)[0]
