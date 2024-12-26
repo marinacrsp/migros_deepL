@@ -60,8 +60,17 @@ print(f'{main_path}, \n {output_path}, \n {save_result_path}')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model_id = config["model"]["model_id"]
 set_rank = config['model']['rank']
-UNET_TARGET_MODULES = list(config["model"]["unet_modules"])
-TEXT_ENCODER_TARGET_MODULES = list(config["model"]["txt_encoder_modules"])
+#UNET_TARGET_MODULES = list(config["model"]["unet_modules"]) # <- marina code
+#TEXT_ENCODER_TARGET_MODULES = list(config["model"]["txt_encoder_modules"]) # <- marina code
+
+UNET_TARGET_MODULES = [
+    "to_q", "to_k", "to_v",
+    "proj", "proj_in", "proj_out",
+    "conv", "conv1", "conv2",
+    "conv_shortcut", "to_out.0", "time_emb_proj", "ff.net.2",
+]
+
+TEXT_ENCODER_TARGET_MODULES = ["fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"]
 
 
 def seedBasic(seed=DEFAULT_RANDOM_SEED):
@@ -75,7 +84,7 @@ def seedTorch(seed=DEFAULT_RANDOM_SEED):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-seedBasic(); seedTorch();
+seedBasic(); seedTorch()
 
 def clear_cache():
     torch.cuda.empty_cache(); gc.collect(); time.sleep(1); torch.cuda.empty_cache(); gc.collect();
@@ -362,96 +371,40 @@ text_encoder = text_encoder.requires_grad_(False)
 unet = pipe.unet
 unet = unet.requires_grad_(False)
 
-def set_Linear_SeLoRA(model, target_modules, rank):
+def set_Linear_SeLoRA(model, target_modules):
+    # works!
      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
-
     for name, layer in model.named_modules():
-        
         if isinstance(layer, nn.Linear):
 
-            if name.split('.')[-1] in target_modules: # NOTE: Check if the name of current layer is contained in the target modules
+            LoRA_layer = Linear(
+                  in_features = layer.in_features,
+                  out_features = layer.out_features,
+                  r = 1
+            )
 
-                print(f"Replacing layer {name.split('.')[-1]} in {layer}")
-                LoRA_layer = Linear(
-                    in_features = layer.in_features,
-                    out_features = layer.out_features,
-                    r = rank
-                )
-                LoRA_layer.weight = layer.weight
-                LoRA_layer.weight.requires_grad = True
-                LoRA_layer.bias = layer.bias
+            LoRA_layer.weight = layer.weight
+            LoRA_layer.weight.requires_grad = False
+            LoRA_layer.bias = layer.bias
+            if LoRA_layer.bias != None:
+                LoRA_layer.bias.requires_grad = False
 
-                if LoRA_layer.bias != None:
-                    LoRA_layer.bias.requires_grad = True
-
-                pointing_layer = model
-
-                if name.split('.')[-1] in target_modules: 
-
+            pointing_layer = model
+            #if len(target_modules) == 0:
+            if False:
+                if name.split('.')[-1] in target_modules:
                     for layer_name in name.split('.')[:-1]:
                         pointing_layer = getattr(pointing_layer, layer_name)
+            else:
+              if name.split('.')[-1] in target_modules:
+                for layer_name in name.split('.')[:-1]:
+                        pointing_layer = getattr(pointing_layer, layer_name)
 
+                setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
     return model
 
-# def set_Linear_SeLoRA(model, target_modules):
-#      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
-#     for name, layer in model.named_modules():
-#         if isinstance(layer, nn.Linear):
-
-#             LoRA_layer = Linear(
-#                   in_features = layer.in_features,
-#                   out_features = layer.out_features,
-#                   r = 1
-#             )
-
-#             LoRA_layer.weight = layer.weight
-#             LoRA_layer.weight.requires_grad = False
-#             LoRA_layer.bias = layer.bias
-#             if LoRA_layer.bias != None:
-#                 LoRA_layer.bias.requires_grad = False
-
-#             pointing_layer = model
-#             if len(target_modules) != len(None):
-#                 if name.split('.')[-1] in target_modules:
-#                     for layer_name in name.split('.')[:-1]:
-#                         pointing_layer = getattr(pointing_layer, layer_name)
-#             else:
-#                 for layer_name in name.split('.')[:-1]:
-#                         pointing_layer = getattr(pointing_layer, layer_name)
-
-#                 setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
-#     return model
-
-# def set_Linear_SeLoRA(model, target_modules):
-#     # Replace all linear layers into LoRA layers
-#     for name, layer in model.named_modules():
-#         if isinstance(layer, nn.Linear):
-#             print(f"Checking layer {name} for inclusion in target_modules...")
-#             if len(target_modules) != 0 or name.split('.')[-1] in target_modules:
-#                 print(f"Layer {name} added to LoRA replacement")
-
-#                 LoRA_layer = Linear(
-#                     in_features=layer.in_features,
-#                     out_features=layer.out_features,
-#                     r=1
-#                 )
-#                 LoRA_layer.weight = layer.weight
-#                 LoRA_layer.weight.requires_grad = True
-#                 LoRA_layer.bias = layer.bias
-#                 if LoRA_layer.bias is not None:
-#                     LoRA_layer.bias.requires_grad = True
-
-#                 pointing_layer = model
-#                 for layer_name in name.split('.')[:-1]:
-#                     pointing_layer = getattr(pointing_layer, layer_name)
-
-#                 # Replace the layer
-#                 setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
-#                 print(f"Replaced {name} with LoRA layer")
-#     return model
-
-unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES, set_rank)
-text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES, set_rank)
+unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES) # removed: set_rank
+text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES) # removed: set rank
 
 
 ### Print the parameters in the Unet and Text encoder that will be trained
@@ -462,18 +415,17 @@ print_trainable_parameters(unet_lora)
 class ImageDataset(Dataset):
     def __init__(self, root_dir, df, tokenizer, size = 224, center_crop = True):
         self.root_dir = root_dir
-        self.files = df['file_name'].tolist()
+        self.files = df['File_name'].tolist()
         self.findings = df['text'].tolist()
         self.tokenizer = tokenizer
-        self.image_transforms = transforms.ToTensor()
-        # self.image_transforms = transforms.Compose(
-            # [
-                # transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                # transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                # transforms.ToTensor(),
-                # transforms.Normalize([0.5], [0.5]),
-            # ]
-        # )
+        self.image_transforms = transforms.Compose(
+            [
+                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+                transforms.ToTensor(),
+                transforms.Normalize([0.5], [0.5]),
+            ]
+        )
 
 
     def __len__(self):
@@ -785,7 +737,7 @@ trainer = Trainer(
     optimizer = optimizer,
     train_dl = train_loader,
     test_dl = valid_loader,
-    total_epoch = 10,
+    total_epoch = 2, #10,
     WEIGHT_DTYPE = WEIGHT_DTYPE,
     threshould = 11.3,
     per_iter_valid = len(train_loader),
