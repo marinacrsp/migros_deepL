@@ -1,6 +1,7 @@
 #!/bin/bash
 #SBATCH  --output=/work/scratch/mcrespo/output/%j.out
 #SBATCH  --account=dl_jobs
+#SBATCH  --time=12:00:00
 
 # Load Conda
 

@@ -462,17 +462,18 @@ print_trainable_parameters(unet_lora)
 class ImageDataset(Dataset):
     def __init__(self, root_dir, df, tokenizer, size = 224, center_crop = True):
         self.root_dir = root_dir
-        self.files = df['File_name'].tolist()
+        self.files = df['file_name'].tolist()
         self.findings = df['text'].tolist()
         self.tokenizer = tokenizer
-        self.image_transforms = transforms.Compose(
-            [
-                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                transforms.ToTensor(),
-                transforms.Normalize([0.5], [0.5]),
-            ]
-        )
+        self.image_transforms = transforms.ToTensor()
+        # self.image_transforms = transforms.Compose(
+            # [
+                # transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+                # transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+                # transforms.ToTensor(),
+                # transforms.Normalize([0.5], [0.5]),
+            # ]
+        # )
 
 
     def __len__(self):
