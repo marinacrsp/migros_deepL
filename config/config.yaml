@@ -4,7 +4,7 @@ test:
   imgs_folder:  /work/scratch/mcrespo/output/test_22_12/test_imgs
 
 output:
-  path: /work/scratch/mcrespo/output/test_22_12
+  path: /work/scratch/mcrespo/output/test_12_26
   folder_name: /selora_outputs
   folder_lora_name: /loras
 
@@ -22,7 +22,7 @@ lr: 1.e-4
 
 model:
   model_id: runwayml/stable-diffusion-v1-5
-  unet_modules: to_v
-  txt_encoder_modules: v_proj
+  unet_modules: {"to_q", "to_k", "to_v"}
+  txt_encoder_modules: {"q_proj", "k_proj", "v_proj"}
   rank: 4
   expandable: False

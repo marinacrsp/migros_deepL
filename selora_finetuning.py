@@ -59,9 +59,9 @@ print(f'{main_path}, \n {output_path}, \n {save_result_path}')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model_id = config["model"]["model_id"]
-UNET_TARGET_MODULES = [config["model"]["unet_modules"]]
-TEXT_ENCODER_TARGET_MODULES = [config["model"]["txt_encoder_modules"]]
-
+set_rank = config['model']['rank']
+UNET_TARGET_MODULES = list(config["model"]["unet_modules"])
+TEXT_ENCODER_TARGET_MODULES = list(config["model"]["txt_encoder_modules"])
 
 
 def seedBasic(seed=DEFAULT_RANDOM_SEED):
@@ -362,7 +362,7 @@ text_encoder = text_encoder.requires_grad_(False)
 unet = pipe.unet
 unet = unet.requires_grad_(False)
 
-def set_Linear_SeLoRA(model, target_modules):
+def set_Linear_SeLoRA(model, target_modules, rank):
      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
 
     for name, layer in model.named_modules():
@@ -375,7 +375,7 @@ def set_Linear_SeLoRA(model, target_modules):
                 LoRA_layer = Linear(
                     in_features = layer.in_features,
                     out_features = layer.out_features,
-                    r = 4
+                    r = rank
                 )
                 LoRA_layer.weight = layer.weight
                 LoRA_layer.weight.requires_grad = True
@@ -450,8 +450,8 @@ def set_Linear_SeLoRA(model, target_modules):
 #                 print(f"Replaced {name} with LoRA layer")
 #     return model
 
-unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES)
-text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES)
+unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES, set_rank)
+text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES, set_rank)
 
 
 ### Print the parameters in the Unet and Text encoder that will be trained

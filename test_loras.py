@@ -78,7 +78,7 @@ for place in range(len(train_df)):
     
     temp_prompts = train_df.text.iloc[place]
     print(f'Txt: {temp_prompts}')
-    temp = pipe(temp_prompts, num_iterations=30, height = 224, width = 224).images[0]
+    temp = pipe(temp_prompts, num_inference_steps=30, height = 320, width = 320).images[0]
 
     temp.save(f'{generate_to_folder}/{place}.png')
 
