@@ -7,3 +7,7 @@ squeue --me
 
 
 ### Modify all necessary directories in selora_finetuning.py accordingly
+
+
+### To copy remote folders to this directory
+scp -r /source/folder username@student-cluster.inf.ethz.ch:/remote/folder/directory

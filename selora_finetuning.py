@@ -365,24 +365,14 @@ class Linear(nn.Linear, LoRALayer):
 
         return optimizer
 
+
 text_encoder = pipe.text_encoder
 text_encoder = text_encoder.requires_grad_(False)
 unet = pipe.unet
 unet = unet.requires_grad_(False)
 
 def set_Linear_SeLoRA(model, target_modules):
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
     # works!
->>>>>>> ebd7d54 (fixed trainable params selection)
-=======
-    # works!
->>>>>>> ebd7d5495b18357a57ee009c992c2c0f24c756db
-=======
-    # works!
->>>>>>> ebd7d5495b18357a57ee009c992c2c0f24c756db
      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
     for name, layer in model.named_modules():
         if isinstance(layer, nn.Linear):
@@ -401,23 +391,6 @@ def set_Linear_SeLoRA(model, target_modules):
 
             pointing_layer = model
             #if len(target_modules) == 0:
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-            # if name.split('.')[-1] in target_modules:
-            for layer_name in name.split('.')[:-1]:
-                    pointing_layer = getattr(pointing_layer, layer_name)
-
-            setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
-    return model
-
-
-# unet_lora = unet
-unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES)
-text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES)
-
-=======
             if False:
                 if name.split('.')[-1] in target_modules:
                     for layer_name in name.split('.')[:-1]:
@@ -430,43 +403,13 @@ text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES)
                 setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
     return model
 
-=======
-            if False:
-                if name.split('.')[-1] in target_modules:
-                    for layer_name in name.split('.')[:-1]:
-                        pointing_layer = getattr(pointing_layer, layer_name)
-            else:
-              if name.split('.')[-1] in target_modules:
-                for layer_name in name.split('.')[:-1]:
-                        pointing_layer = getattr(pointing_layer, layer_name)
-
-                setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
-    return model
-
->>>>>>> ebd7d5495b18357a57ee009c992c2c0f24c756db
-=======
-            if False:
-                if name.split('.')[-1] in target_modules:
-                    for layer_name in name.split('.')[:-1]:
-                        pointing_layer = getattr(pointing_layer, layer_name)
-            else:
-              if name.split('.')[-1] in target_modules:
-                for layer_name in name.split('.')[:-1]:
-                        pointing_layer = getattr(pointing_layer, layer_name)
-
-                setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
-    return model
-
->>>>>>> ebd7d5495b18357a57ee009c992c2c0f24c756db
 unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES) # removed: set_rank
 text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES) # removed: set rank
 
 
 ### Print the parameters in the Unet and Text encoder that will be trained
->>>>>>> ebd7d54 (fixed trainable params selection)
 print_trainable_parameters(text_encoder_lora)
 print_trainable_parameters(unet_lora)
-
 
 
 class ImageDataset(Dataset):
@@ -509,7 +452,6 @@ class ImageDataset(Dataset):
 
 # reports = reports[['File_name', 'text']]
 metadata = pd.read_csv(reports_path)
-print(metadata)
 # Split the data into train, validation, and test sets
 train_df, temp_df = train_test_split(metadata, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
 valid_df, test_df = train_test_split(temp_df, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
