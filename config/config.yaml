@@ -10,14 +10,14 @@ output:
 
 dataset:
   main_path: /home/mcrespo/migros_deepL
+  # dataset_name: /BraTS2021_final
   dataset_name: /BraTS2021_final
-  # dataset_name: /test_img
-  sequence_type: /Flair
+  sequence_type: /Flair_final
   report_name: /metadata.csv
   
 
 default_random_seed: 42
-batch_size: 2
+batch_size: 8
 lr: 1.e-4
 
 model:
