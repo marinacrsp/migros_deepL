@@ -11,3 +11,6 @@ squeue --me
 
 ### To copy remote folders to this directory
 scp -r /source/folder username@student-cluster.inf.ethz.ch:/remote/folder/directory
+
+
+
