@@ -373,9 +373,13 @@ unet = unet.requires_grad_(False)
 def set_Linear_SeLoRA(model, target_modules):
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
     # works!
 >>>>>>> ebd7d54 (fixed trainable params selection)
+=======
+    # works!
+>>>>>>> ebd7d5495b18357a57ee009c992c2c0f24c756db
 =======
     # works!
 >>>>>>> ebd7d5495b18357a57ee009c992c2c0f24c756db
@@ -397,6 +401,7 @@ def set_Linear_SeLoRA(model, target_modules):
 
             pointing_layer = model
             #if len(target_modules) == 0:
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 
@@ -425,6 +430,20 @@ text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES)
                 setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
     return model
 
+=======
+            if False:
+                if name.split('.')[-1] in target_modules:
+                    for layer_name in name.split('.')[:-1]:
+                        pointing_layer = getattr(pointing_layer, layer_name)
+            else:
+              if name.split('.')[-1] in target_modules:
+                for layer_name in name.split('.')[:-1]:
+                        pointing_layer = getattr(pointing_layer, layer_name)
+
+                setattr(pointing_layer, name.split('.')[-1], LoRA_layer)
+    return model
+
+>>>>>>> ebd7d5495b18357a57ee009c992c2c0f24c756db
 =======
             if False:
                 if name.split('.')[-1] in target_modules:
