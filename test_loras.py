@@ -41,10 +41,9 @@ model_id = config["model"]["model_id"]
 # Dataset directory & outputs
 main_path = config["dataset"]["main_path"]
 dataset_name = config["dataset"]["dataset_name"]
-modality = config["dataset"]["sequence_type"]
 
 ## Load the datasets directory and reports path
-Data_storage = main_path + dataset_name + modality
+Data_storage = main_path + dataset_name 
 reports_path = Data_storage + config["dataset"]["report_name"]
 generate_to_folder = config['test']['imgs_folder']
 
@@ -58,6 +57,10 @@ txt_encoder_file = load_file(config['test']['txt_encoder_path'])
 
 pipe = StableDiffusionPipeline.from_pretrained(model_id)
 
+print(pipe.text_encoder)
+
+
+print('----- Replacing modules in model -----')
 pipe.text_encoder.load_state_dict(txt_encoder_file)
 pipe.unet.load_state_dict(unet_file)
 
@@ -72,7 +75,7 @@ check_and_make_folder(generate_to_folder)
 metadata = pd.read_csv(reports_path)
 train_df, temp_df = train_test_split(metadata, test_size=0.2, random_state=32)
 valid_df, test_df = train_test_split(temp_df, test_size=0.2, random_state=32)
-
+train_df = train_df[:10] # Generate the first 10 images
 ################ Generate the new images #################
 for place in range(len(train_df)):
     

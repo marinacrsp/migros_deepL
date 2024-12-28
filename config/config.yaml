@@ -1,7 +1,7 @@
 test:
-  unet_path: /work/scratch/mcrespo/output/test_12_26/12-26_11h44m10s/selora_outputs/loras/trained_model/final_Unet/diffusion_pytorch_model.safetensors
-  txt_encoder_path: /work/scratch/mcrespo/output/test_12_26/12-26_11h44m10s/selora_outputs/loras/trained_model/final_Text/model.safetensors
-  imgs_folder:  /work/scratch/mcrespo/output/test_12_26/test_imgs
+  unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Unet/diffusion_pytorch_model.safetensors
+  txt_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Text/model.safetensors
+  imgs_folder:  /work/scratch/mcrespo/output/test_12_26_alldataset/test_imgs
 
 output:
   path: /work/scratch/mcrespo/output/test_12_26_alldataset
@@ -10,14 +10,12 @@ output:
 
 dataset:
   main_path: /home/mcrespo/migros_deepL
-  # dataset_name: /BraTS2021_final
-  dataset_name: /BraTS2021_final
-  sequence_type: /Flair_final
+  dataset_name: /sample_flair
   report_name: /metadata.csv
   
 
 default_random_seed: 42
-batch_size: 8
+batch_size: 2
 lr: 1.e-4
 
 model:
