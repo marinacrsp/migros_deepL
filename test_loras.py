@@ -75,6 +75,7 @@ check_and_make_folder(generate_to_folder)
 metadata = pd.read_csv(reports_path)
 train_df, temp_df = train_test_split(metadata, test_size=0.2, random_state=32)
 valid_df, test_df = train_test_split(temp_df, test_size=0.2, random_state=32)
+
 train_df = train_df[:10] # Generate the first 10 images
 ################ Generate the new images #################
 for place in range(len(train_df)):

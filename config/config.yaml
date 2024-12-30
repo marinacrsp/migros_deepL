@@ -1,7 +1,9 @@
 test:
-  unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Unet/diffusion_pytorch_model.safetensors
-  txt_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Text/model.safetensors
-  imgs_folder:  /work/scratch/mcrespo/output/test_12_26_alldataset/test_imgs
+  # unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Unet/diffusion_pytorch_model.safetensors
+  unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Unet/diffusion_pytorch_model.safetensors
+  # txt_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Text/model.safetensors
+  text_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Text/model.safetensors
+  imgs_folder:  /work/scratch/mcrespo/output/test_12_26_alldataset/test_selora_experiment
 
 output:
   path: /work/scratch/mcrespo/output/test_12_26_alldataset
@@ -10,17 +12,17 @@ output:
 
 dataset:
   main_path: /home/mcrespo/migros_deepL
-  dataset_name: /sample_flair
+  dataset_name: /BraTS2021_final/sample_flair100
   report_name: /metadata.csv
   
 
 default_random_seed: 42
-batch_size: 2
+batch_size: 4
 lr: 1.e-4
 
 model:
   model_id: runwayml/stable-diffusion-v1-5
-  unet_modules: {"to_q", "to_k", "to_v"}
-  txt_encoder_modules: {"q_proj", "k_proj", "v_proj"}
+  unet_modules: {"to_q", "to_k", "to_v", "proj", "proj_in", "proj_out"}
+  txt_encoder_modules: {"fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"}
   rank: 4
   expandable: False

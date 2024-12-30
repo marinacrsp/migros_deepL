@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH  --output=/work/scratch/mcrespo/output/%j.out
-#SBATCH  --account=dl_jobs
+# SBATCH --account=dl
 
 # Load Conda
 
@@ -10,5 +10,6 @@ source /home/mcrespo/miniconda3/etc/profile.d/conda.sh
 conda activate /home/mcrespo/miniconda3/envs/sel_py11
 nvcc --version
 
-# python test_loras.py
-python train_lora.py
+python test_loras.py
+# python train_lora.py
+# python selora_finetuning_luca.py

@@ -59,17 +59,17 @@ print(f'{main_path}, \n {output_path}, \n {save_result_path}')
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model_id = config["model"]["model_id"]
 set_rank = config['model']['rank']
-#UNET_TARGET_MODULES = list(config["model"]["unet_modules"]) # <- marina code
-#TEXT_ENCODER_TARGET_MODULES = list(config["model"]["txt_encoder_modules"]) # <- marina code
+UNET_TARGET_MODULES = list(config["model"]["unet_modules"]) # <- marina code
+TEXT_ENCODER_TARGET_MODULES = list(config["model"]["txt_encoder_modules"]) # <- marina code
 
-UNET_TARGET_MODULES = [
-    "to_q", "to_k", "to_v",
-    "proj", "proj_in", "proj_out",
-    "conv", "conv1", "conv2",
-    "conv_shortcut", "to_out.0", "time_emb_proj", "ff.net.2",
-]
+# UNET_TARGET_MODULES = [
+#     "to_q", "to_k", "to_v",
+#     "proj", "proj_in", "proj_out",
+#     "conv", "conv1", "conv2",
+#     "conv_shortcut", "to_out.0", "time_emb_proj", "ff.net.2",
+# ]
 
-TEXT_ENCODER_TARGET_MODULES = ["fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"]
+# TEXT_ENCODER_TARGET_MODULES = ["fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"]
 
 
 def seedBasic(seed=DEFAULT_RANDOM_SEED):
@@ -130,12 +130,8 @@ def remove_param_from_optimizer(optim, param):
             if param.shape == optim_param.shape and (param==optim_param).all():
                 del optim.param_groups[j]["params"][i]
 
-clear_cache()
 
 """# Hyperparameters and Path"""
-
-
-
 # assert not os.path.exists(f'{save_result_path}/{folder_name}'), print('LoRA Experiment Already Run')
 check_and_make_folder(f'{save_result_path}')
 check_and_make_folder(f'{save_result_path}/{folder_name}')
@@ -148,21 +144,12 @@ vae = pipe.vae
 unet = pipe.unet
 
 # Freeze the Bulk part of the model
-text_encoder.requires_grad_(False)
-vae.requires_grad_(False)
-unet.requires_grad_(False)
-print()
-
-clear_cache()
-
-text_encoder = pipe.text_encoder
 text_encoder = text_encoder.requires_grad_(False)
-unet = pipe.unet
+vae =vae.requires_grad_(False)
 unet = unet.requires_grad_(False)
 
-
-unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES) # removed: set_rank
-text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES) # removed: set rank
+unet_lora = set_Linear_SeLoRA(unet, UNET_TARGET_MODULES, set_rank) # removed: set_rank
+text_encoder_lora = set_Linear_SeLoRA(text_encoder, TEXT_ENCODER_TARGET_MODULES, set_rank) # removed: set rank
 
 
 ### Print the parameters in the Unet and Text encoder that will be trained
@@ -182,24 +169,24 @@ train_ds = ImageDataset(
     tokenizer=tokenizer,
 )
 
-valid_ds = ImageDataset(
-    root_dir=Data_storage,
-    df=valid_df,
-    tokenizer=tokenizer,
-)
+# valid_ds = ImageDataset(
+#     root_dir=Data_storage,
+#     df=valid_df,
+#     tokenizer=tokenizer,
+# )
 
 test_ds = ImageDataset(
     root_dir=Data_storage,
     df=test_df,
     tokenizer=tokenizer,
 )
-print(f'n of working cpus: {os.cpu_count()}')
+# print(f'n of working cpus: {os.cpu_count()}')
 num_workers = 2
 # DataLoader initialization
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers = num_workers)
-valid_loader = DataLoader(valid_ds, batch_size=BATCH_SIZE // 2, shuffle=False, num_workers = num_workers)
+# valid_loader = DataLoader(valid_ds, batch_size=BATCH_SIZE // 2, shuffle=False, num_workers = num_workers)
 test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE // 2, shuffle=False, num_workers = num_workers)
-
+print(f'Training set of size: {len(train_df)}, and real train set of size: {len(train_ds)}')
 optimizer = torch.optim.Adam(list(unet_lora.parameters()) + list(text_encoder_lora.parameters()), lr=LR)
 
 ###############################################################################
@@ -231,14 +218,10 @@ class Trainer:
 
         self.best_text_encoder = None
         self.best_unet = None
-
         self.display_line = ''
-
         self.added_rank = 1
 
         print(f'total steps: {len(train_dl) * total_epoch}')
-
-
 
     def Expandable_LoRA(self, model):
         
@@ -281,12 +264,10 @@ class Trainer:
 
             noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
 
-
             # Get the text embedding for conditioning
             encoder_hidden_states = self.text_encoder(pormpt_idxs)[0]
             # Predict the noise residual (x0 - xt)
             model_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
-
             target = noise
 
             ## MSE - epsilon_t vs pred_epsilon_t
@@ -294,9 +275,8 @@ class Trainer:
             valid_loss.append(loss.item() * len(batch))
             number_of_instance += len(batch)
             
-            # clear_cache()
-            torch.cuda.empty_cache()
-            del noisy_latents, latents, pixel_values, pormpt_idxs, model_pred, encoder_hidden_states
+            clear_cache()
+            # torch.cuda.empty_cache()
 
         ########################################################################
         ## add log and save model here TODO
@@ -311,11 +291,8 @@ class Trainer:
         return sum(valid_loss) / number_of_instance
 
     def trainable_percentage(self, model):
-
         total_parameter_count = sum([np.prod(p.size()) for p in model.parameters()])
-
         trainable_parameter_count = sum([np.prod(p.size()) for p in filter(lambda p: p.requires_grad, model.parameters())])
-
         return (trainable_parameter_count / total_parameter_count)  * 100
 
     def model_to_temp(self, model):
@@ -379,37 +356,73 @@ class Trainer:
                 self.optimizer.step()
                 print(f'Training error at step {step}: {loss.item()}')
                 self.total_step += 1
+                
+                # #######################################################################
+                # #### Commenting the expandable lora's 
+                # if self.total_step % self.expand_step == 0:
+                #     self.model_to_temp(self.unet)
+                #     self.model_to_temp(self.text_encoder)
 
-                torch.cuda.empty_cache()
-                del noisy_latents, latents, pixel_values, pormpt_idxs, model_pred, encoder_hidden_states
+                #     # Get the text embedding for conditioning
+                #     encoder_hidden_states = self.text_encoder(pormpt_idxs)[0]
+                #     # Predict the noise residual
+                #     model_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
 
-                if self.total_step % self.per_iter_valid == 0:
+                #     loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
 
-                    valid_rmse = self.valid()
+                #     self.optimizer.zero_grad()
 
-                    if valid_rmse <= min([x for x in trainer.result_df['Valid Loss'] if x != ' --- '] + [1.0]):
-
-                        self.best_text_encoder = copy.deepcopy(self.text_encoder).cpu()
-                        self.best_unet = copy.deepcopy(self.unet).cpu()
-
-                        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model')
-                        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
-                        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Text')
-                        print(f'Best validation error so far in epoch {epoch}, step {step}: {valid_rmse}')
-                        self.unet.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
-                        self.text_encoder.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Text')
+                #     loss.backward()
 
 
-                    self.result_df.loc[len(self.result_df)] = [epoch, self.total_step, np.round(np.mean(recorded_loss), 4), np.round(valid_rmse, 4), self.added_rank,  self.trainable_percentage(self.unet), self.trainable_percentage(self.text_encoder)]
+                #     self.display_line = ''
+                #     self.Expandable_LoRA(self.unet)
+                #     self.Expandable_LoRA(self.text_encoder)
 
-                    print(self.result_df)
-                    recorded_loss = []
+
+                #     self.model_to_temp(self.unet)
+                #     self.model_to_temp(self.text_encoder)
+
+
+                ######################################################################
+
+                clear_cache()
+                # if self.total_step % self.per_iter_valid == 0:
+
+                #     valid_rmse = self.valid()
+
+                #     if valid_rmse <= min([x for x in trainer.result_df['Valid Loss'] if x != ' --- '] + [1.0]):
+
+                #         self.best_text_encoder = copy.deepcopy(self.text_encoder).cpu()
+                #         self.best_unet = copy.deepcopy(self.unet).cpu()
+
+                #         check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model')
+                #         check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
+                #         check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Text')
+                #         print(f'Best validation error so far in epoch {epoch}, step {step}: {valid_rmse}')
+                #         self.unet.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
+                #         self.text_encoder.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Text')
+
+
+                #     self.result_df.loc[len(self.result_df)] = [epoch, self.total_step, np.round(np.mean(recorded_loss), 4), np.round(valid_rmse, 4), self.added_rank,  self.trainable_percentage(self.unet), self.trainable_percentage(self.text_encoder)]
+
+                #     print(self.result_df)
+                #     recorded_loss = []
 
                 if self.total_step % self.log_period == 0:
-
                     self.result_df.loc[len(self.result_df)] = [epoch, self.total_step, np.round(np.mean(recorded_loss), 4), ' --- ', self.added_rank,  self.trainable_percentage(self.unet), self.trainable_percentage(self.text_encoder)]
-
                     self.result_df.to_csv(f'{save_result_path}/{folder_name}/results.csv')
+
+        print('Saving model')
+        self.best_text_encoder = copy.deepcopy(self.text_encoder).cpu()
+        self.best_unet = copy.deepcopy(self.unet).cpu()
+
+        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model')
+        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
+        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Text')
+        self.unet.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
+        self.text_encoder.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Text')
+
 
 
 trainer = Trainer(
@@ -419,7 +432,7 @@ trainer = Trainer(
     noise_scheduler = noise_scheduler,
     optimizer = optimizer,
     train_dl = train_loader,
-    test_dl = valid_loader,
+    test_dl = test_loader,
     total_epoch = 10, #10,
     WEIGHT_DTYPE = WEIGHT_DTYPE,
     threshould = 11.3,
@@ -432,6 +445,8 @@ trainer = Trainer(
 trainer.train()
 
 trainer.result_df.to_csv(f'{save_result_path}/{folder_name}/results.csv')
+
+
 
 """# Testing / Inference"""
 print('___________________Testing / Inference phase __________________')

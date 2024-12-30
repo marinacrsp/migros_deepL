@@ -212,7 +212,7 @@ def remove_param_from_optimizer(optim, param):
 
 
 
-def set_Linear_SeLoRA(model, target_modules):
+def set_Linear_SeLoRA(model, target_modules, rank):
     # works!
      # replace all linear layer (include q,k,v layer) into DyLoRA Layer.
     for name, layer in model.named_modules():
@@ -221,7 +221,7 @@ def set_Linear_SeLoRA(model, target_modules):
             LoRA_layer = Linear(
                   in_features = layer.in_features,
                   out_features = layer.out_features,
-                  r = 1
+                  r = rank
             )
 
             LoRA_layer.weight = layer.weight
