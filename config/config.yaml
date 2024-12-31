@@ -1,28 +1,27 @@
 test:
-  # unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Unet/diffusion_pytorch_model.safetensors
-  unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Unet/diffusion_pytorch_model.safetensors
-  # txt_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-27_16h45m08s/selora_outputs/loras/trained_model/final_Text/model.safetensors
-  text_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Text/model.safetensors
-  imgs_folder:  /work/scratch/mcrespo/output/test_12_26_alldataset/test_selora_experiment
+  unet_path: /work/scratch/mcrespo/output/test_12_30/12-30_21h07m30s/selora_outputs/loras/trained_model/final_Unet/
+  # unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Unet/
+  txt_encoder_path: /work/scratch/mcrespo/output/test_12_30/12-30_21h07m30s/selora_outputs/loras/trained_model/final_Text/
+  # txt_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Text/
+  imgs_folder:  /work/scratch/mcrespo/output/test_12_30/test_200-100_50steps
 
 output:
-  path: /work/scratch/mcrespo/output/test_12_26_alldataset
+  path: /work/scratch/mcrespo/output/test_12_31
   folder_name: /selora_outputs
   folder_lora_name: /loras
 
 dataset:
   main_path: /home/mcrespo/migros_deepL
-  dataset_name: /BraTS2021_final/sample_flair100
+  dataset_name: /BraTS2021_final/sample_flair200
   report_name: /metadata.csv
   
 
 default_random_seed: 42
-batch_size: 4
-lr: 1.e-4
+batch_size: 2
+lr: 1.e-5
+n_epochs: 100
 
 model:
   model_id: runwayml/stable-diffusion-v1-5
-  unet_modules: {"to_q", "to_k", "to_v", "proj", "proj_in", "proj_out"}
+  unet_modules: {"to_q", "to_k", "to_v","proj", "proj_in", "proj_out","conv", "conv1", "conv2","conv_shortcut", "to_out.0", "time_emb_proj", "ff.net.2"}
   txt_encoder_modules: {"fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"}
-  rank: 4
-  expandable: False

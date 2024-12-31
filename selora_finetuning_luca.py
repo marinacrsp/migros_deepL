@@ -35,6 +35,7 @@ config = load_config(args.config)
 DEFAULT_RANDOM_SEED = config["default_random_seed"]
 WEIGHT_DTYPE = torch.float32
 BATCH_SIZE = config["batch_size"]
+EPOCHS = config["n_epochs"]
 LR = config["lr"]
 ##############################################################
 # Dataset directory & outputs
@@ -58,7 +59,7 @@ print(f'{main_path}, \n {output_path}, \n {save_result_path}')
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 model_id = config["model"]["model_id"]
-set_rank = config['model']['rank']
+
 #UNET_TARGET_MODULES = list(config["model"]["unet_modules"]) # <- marina code
 #TEXT_ENCODER_TARGET_MODULES = list(config["model"]["txt_encoder_modules"]) # <- marina code
 
@@ -622,7 +623,7 @@ class Trainer:
         recorded_loss = []
 
         for epoch in range(self.total_epoch):
-
+                
             pbar = tqdm(self.train_dl) # The training bar (yes)
             for step, batch in enumerate(pbar):
 
@@ -751,9 +752,9 @@ trainer = Trainer(
     optimizer = optimizer,
     train_dl = train_loader,
     test_dl = test_loader,
-    total_epoch = 100, #10,
+    total_epoch = EPOCHS, #10,
     WEIGHT_DTYPE = WEIGHT_DTYPE,
-    threshould = 1.1, # from paper
+    threshould = 1, # from paper
     per_iter_valid = len(train_loader),
     log_period = 40,
     expand_step = 40,
@@ -772,15 +773,6 @@ print('___________________Testing / Inference phase __________________')
 unet_lora.eval()
 text_encoder_lora.eval()
 clear_cache()
-# new_pipe = StableDiffusionPipeline(
-#     tokenizer=tokenizer,
-#     text_encoder=trainer.best_text_encoder.to(device, dtype=WEIGHT_DTYPE),
-#     vae=vae,
-#     unet=trainer.best_unet.to(device, dtype=WEIGHT_DTYPE),
-#     scheduler=noise_scheduler,
-#     safety_checker= None,
-#     feature_extractor=None
-# )
 
 new_pipe = StableDiffusionPipeline(
     tokenizer=tokenizer,
