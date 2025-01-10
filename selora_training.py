@@ -5,7 +5,7 @@ import os, gc, sys, time, random, math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from dataset_utils import *
 from typing import Optional, List
 
 torch.backends.cuda.enable_mem_efficient_sdp(False)
@@ -23,6 +23,9 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import openpyxl
 from config.config_utils import *
+from tqdm.notebook import tqdm
+from IPython.display import display
+import copy
 
 
 
@@ -41,7 +44,6 @@ THRESHOLD = config["thres"]
 ##############################################################
 # Dataset directory & outputs
 main_path = config["dataset"]["main_path"]
-print(main_path)
 dataset_name = config["dataset"]["dataset_name"]
 
 ## Load the datasets directory and reports path
@@ -142,6 +144,21 @@ clear_cache()
 # assert not os.path.exists(f'{save_result_path}/{folder_name}'), print('LoRA Experiment Already Run')
 check_and_make_folder(f'{save_result_path}')
 check_and_make_folder(f'{save_result_path}/{folder_name}')
+
+
+metadata = pd.read_csv(reports_path)
+
+train_df, test_df = train_test_split(metadata, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
+
+########################################################################
+##### Generate the folder for the test (AUC/ FID)
+#######################################################################
+sample_test = output_path + '/sample_test_60_fromscript'
+check_and_make_folder(sample_test)
+copy_images(test_df['file_name'], sample_test, Data_storage)
+# Save combined metadata to the destination folder
+test_df.to_csv(sample_test+'/metadata.csv', index=False)
+
 
 pipe = StableDiffusionPipeline.from_pretrained(model_id)
 tokenizer = pipe.tokenizer
@@ -439,13 +456,6 @@ class ImageDataset(Dataset):
 
 
 
-# reports = reports[['File_name', 'text']]
-metadata = pd.read_csv(reports_path)
-# Split the data into train, validation, and test sets
-#train_df, temp_df = train_test_split(metadata, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
-#valid_df, test_df = train_test_split(temp_df, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
-# -> I deactivated the valid
-train_df, test_df = train_test_split(metadata, test_size=0.2, random_state=DEFAULT_RANDOM_SEED)
 
 
 # ImageDataset initialization
@@ -455,45 +465,24 @@ train_ds = ImageDataset(
     tokenizer=tokenizer,
 )
 
-# valid_ds = ImageDataset(
-#     root_dir=Data_storage,
-#     df=valid_df,
-#     tokenizer=tokenizer,
-# )
-
-test_ds = ImageDataset(
-    root_dir=Data_storage,
-    df=test_df,
-    tokenizer=tokenizer,
-)
 print(f'n of working cpus: {os.cpu_count()}')
 num_workers = 2
 # DataLoader initialization
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers = num_workers)
 #valid_loader = DataLoader(valid_ds, batch_size=BATCH_SIZE // 2, shuffle=False, num_workers = num_workers)
-test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE // 2, shuffle=False, num_workers = num_workers)
-
 optimizer = torch.optim.Adam(list(unet_lora.parameters()) + list(text_encoder_lora.parameters()), lr=LR)
 print('train set')
-print(len(train_df))
 print(len(train_ds))
 
 """# Training"""
-
-from tqdm.notebook import tqdm
-from IPython.display import display
-import copy
-
-
 class Trainer:
-    def __init__(self, vae, unet, text_encoder, noise_scheduler, optimizer, train_dl, test_dl, total_epoch, WEIGHT_DTYPE,total_step, threshould = 2, per_iter_valid = 60, log_period = 20, expand_step = 20):
+    def __init__(self, vae, unet, text_encoder, noise_scheduler, optimizer, train_dl, total_epoch, WEIGHT_DTYPE,total_step, threshould = 2, per_iter_valid = 60, log_period = 20, expand_step = 20):
         self.vae = vae.to(device, dtype=WEIGHT_DTYPE)
         self.unet = unet.to(device, dtype=WEIGHT_DTYPE)
         self.text_encoder = text_encoder.to(device, dtype=WEIGHT_DTYPE)
         self.noise_scheduler = noise_scheduler
         self.optimizer = optimizer
         self.train_dl = train_dl
-        self.test_dl = test_dl
         self.WEIGHT_DTYPE = WEIGHT_DTYPE
         self.total_epoch = total_epoch
         self.threshould = threshould
@@ -527,62 +516,6 @@ class Trainer:
         print(self.rank_display_id)
         # self.rank_display_id.update(self.display_line)
 
-
-    def valid(self):
-        self.unet.eval()
-        self.text_encoder.eval()
-        self.vae.eval()
-
-        valid_pbar = tqdm(self.test_dl, desc = 'validating', leave = False)
-
-        valid_loss, number_of_instance = [], 0
-
-        for step, batch in enumerate(valid_pbar):
-
-            pixel_values = batch["instance_images"].to(device, dtype=self.WEIGHT_DTYPE)
-            pormpt_idxs  = batch["instance_prompt_ids"].to(device).squeeze(1)
-
-            # Convert images to latent space
-            latents = self.vae.encode(pixel_values).latent_dist.sample()
-            latents = latents * self.vae.config.scaling_factor
-
-            # Sample noise that we'll add to the latents
-            noise = torch.randn_like(latents) # Randomly generated gaussian - groundtruth epsilon
-            bsz = latents.shape[0]
-            
-            # Sample a random timestep for each image
-            timesteps = torch.randint(0, self.noise_scheduler.config.num_train_timesteps, (bsz,), device=latents.device)
-            timesteps = timesteps.long()
-
-            noisy_latents = self.noise_scheduler.add_noise(latents, noise, timesteps)
-
-            # Get the text embedding for conditioning
-            encoder_hidden_states = self.text_encoder(pormpt_idxs)[0]
-            # Predict the noise residual (x0 - xt)
-            model_pred = self.unet(noisy_latents, timesteps, encoder_hidden_states).sample
-
-            target = noise
-
-            ## MSE - epsilon_t vs pred_epsilon_t
-            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-            valid_loss.append(loss.item() * len(batch))
-            number_of_instance += len(batch)
-            
-            # clear_cache()
-            torch.cuda.empty_cache()
-
-
-        ########################################################################
-        ## add log and save model here TODO
-        ########################################################################
-
-        self.unet.train()
-        self.vae.train()
-        self.text_encoder.train()
-
-        torch.cuda.empty_cache()
-
-        return sum(valid_loss) / number_of_instance
 
     def trainable_percentage(self, model):
 
@@ -685,35 +618,6 @@ class Trainer:
 
                 ######################################################################
 
-
-                #clear_cache()
-
-
-                if self.total_step % self.per_iter_valid == 0 and False: # false: deactivated False
-
-                    valid_rmse = self.valid()
-
-                    if valid_rmse <= min([x for x in trainer.result_df['Valid Loss'] if x != ' --- '] + [1.0]):
-
-                        self.best_text_encoder = copy.deepcopy(self.text_encoder).cpu()
-                        self.best_unet = copy.deepcopy(self.unet).cpu()
-                        self.best_epoch = epoch
-
-                        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model')
-                        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
-                        check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Text')
-
-                        self.unet.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
-                        self.text_encoder.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Text')
-
-
-                    self.result_df.loc[len(self.result_df)] = [epoch, self.total_step, np.round(np.mean(recorded_loss), 4), np.round(valid_rmse, 4), self.added_rank,  self.trainable_percentage(self.unet), self.trainable_percentage(self.text_encoder)]
-
-                    # self._display_id.update(self.result_df)
-
-                    print(self.result_df)
-                    recorded_loss = []
-
                 if self.total_step % self.log_period == 0:
 
                     self.result_df.loc[len(self.result_df)] = [epoch, self.total_step, np.round(np.mean(recorded_loss), 4), ' --- ', self.added_rank,  self.trainable_percentage(self.unet), self.trainable_percentage(self.text_encoder)]
@@ -721,7 +625,11 @@ class Trainer:
                     print(self.result_df)  #
                     self.result_df.to_csv(f'{save_result_path}/{folder_name}/results.csv')
         return self.total_step
-    
+
+generation_path = '/home/mcrespo/migros_deepL/metadata_img_generation.csv'
+metadata_image_generation = pd.read_csv(generation_path)
+
+
 loops = 3
 for i in range(loops):
     if i == 0:
@@ -737,7 +645,6 @@ for i in range(loops):
         noise_scheduler = noise_scheduler,
         optimizer = optimizer,
         train_dl = train_loader,
-        test_dl = test_loader,
         total_epoch = EPOCHS//loops,
         WEIGHT_DTYPE = WEIGHT_DTYPE,
         total_step=total_step,
@@ -749,7 +656,7 @@ for i in range(loops):
     total_step_up = trainer.train()
     """
     # Generating images along training process
-    # """
+    # # """
     print(f'Number of trained steps: {total_step_up}')
     print(f'Generating 5 sample images from trained model')
     train_pipe = StableDiffusionPipeline(
@@ -763,12 +670,10 @@ for i in range(loops):
     )
     train_pipe.to(device)
     check_and_make_folder(f'{save_result_path}/{folder_name}/test_images{i}_loop')
-
-    for place in range(5):
-        temp_prompts = test_df.text.iloc[place]
-        # print(f'Generating image: \n {temp_prompts}')
+    for j in range(5):
+        temp_prompts = metadata_image_generation['text'][j]
         temp = train_pipe(temp_prompts, height = 224, width = 224).images[0]
-        temp.save(f'{save_result_path}/{folder_name}/test_images{i}_loop/{place}.png')
+        temp.save(f'{save_result_path}/{folder_name}/test_images{i}_loop/{j}.png')
         display(temp)
 
 unet_lora.eval()
@@ -793,13 +698,11 @@ new_pipe.to(device)
 check_and_make_folder(f'{save_result_path}/{folder_name}')
 check_and_make_folder(f'{save_result_path}/{folder_name}/test_images')
 
-generation_path = '/home/mcrespo/migros_deepL/metadata_img_generation.csv'
-metadata_image_generation = pd.read_csv(generation_path)
+
 prompts = []
 file_names = []
-for place in range(len(metadata)):
-    # temp_prompts = train_df.text.iloc[place]
-    temp_prompts = metadata['text'][place]
+for place in range(len(metadata_image_generation[:20])):
+    temp_prompts = metadata_image_generation['text'][place]
 
     temp = new_pipe(temp_prompts, height = 224, width = 224).images[0]
     temp.save(f'{save_result_path}/{folder_name}/test_images/{place}.png')
@@ -808,14 +711,14 @@ for place in range(len(metadata)):
     display(temp)
 
 output_path = f'{save_result_path}/{folder_name}/test_images/metadata.csv'
-generated_imgs_df = pd.DataFrame({'file_name': file_names,'Prompt': prompts})
+generated_imgs_df = pd.DataFrame({'file_name': file_names,'text': prompts})
 generated_imgs_df.to_csv(output_path, index=False)
 
-print('______________________Saving model____________________________')
-check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model')
-check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
-check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Text')
-unet_lora.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
-text_encoder_lora.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Text')
+print('______________________Finished image generation____________________________')
+# check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model')
+# check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
+# check_and_make_folder(f'{save_result_path}/{folder_name}/trained_model/final_Text')
+# unet_lora.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Unet')
+# text_encoder_lora.save_pretrained(f'{save_result_path}/{folder_name}/trained_model/final_Text')
 
-trainer.result_df.to_csv(f'{save_result_path}/{folder_name}/results.csv')
+# trainer.result_df.to_csv(f'{save_result_path}/{folder_name}/results.csv')
