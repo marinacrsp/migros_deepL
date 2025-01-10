@@ -1,0 +1,39 @@
+test:
+  unet_path: /work/scratch/mcrespo/output/test_12_30/12-30_21h07m30s/selora_outputs/loras/trained_model/final_Unet/
+  # unet_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Unet/
+  txt_encoder_path: /work/scratch/mcrespo/output/test_12_30/12-30_21h07m30s/selora_outputs/loras/trained_model/final_Text/
+  # txt_encoder_path: /work/scratch/mcrespo/output/test_12_26_alldataset/12-29_17h45m15s/selora_outputs/loras/trained_model/final_Text/
+  imgs_folder:  /work/scratch/mcrespo/output/test_12_30/test_200-100_50steps
+
+output:
+  path: /work/scratch/mcrespo/output/test_01_09
+  folder_name: /selora_outputs
+  folder_lora_name: /loras
+
+dataset:
+  main_path: /home/mcrespo/migros_deepL
+  dataset_name: /BraTS2021_final/sample_t1ce300
+  report_name: /metadata.csv
+  
+
+default_random_seed: 42
+batch_size: 3
+lr: 1.e-4
+n_epochs: 100
+thres: 1.1
+
+model:
+  model_id: runwayml/stable-diffusion-v1-5
+  unet_modules: {"to_q", "to_k", "to_v","proj", "proj_in", "proj_out","conv", "conv1", "conv2","conv_shortcut", "to_out.0", "time_emb_proj", "ff.net.2"}
+  txt_encoder_modules: {"fc1", "fc2", "q_proj", "k_proj", "v_proj", "out_proj"}
+#################################################
+classifier:
+  seed: 78
+  training:
+    n_epochs: 50
+    batch_size: 32
+    lr: 1.e-3
+
+  dataset: 
+    data_train: '/home/mcrespo/migros_deepL/BraTS2021_final/all_generated_thres_1.3_processed/merged_real_fake/'
+    data_test: '/home/mcrespo/migros_deepL/BraTS2021_final/sample_test/'
