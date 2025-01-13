@@ -32,25 +32,17 @@ class ImageDataset(Dataset):
         self.transform = self.get_transform()
 
     def get_transform(self):
-        if self.mode == 'brats':
+        if self.mode == 'brats' or self.mode == 'picai':
             size = 224
             center_crop = True
-            if not self.synthetic:
-                return transforms.Compose(
-                    [
-                        transforms.Grayscale(num_output_channels=1),
-                        transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                        transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                        transforms.ToTensor(),
-                    ]
-                )
-            else:
-                return transforms.Compose(
-                    [
-                        transforms.Grayscale(num_output_channels=1),
-                        transforms.ToTensor(),
-                    ]
-                )
+            return transforms.Compose(
+                [
+                    transforms.Grayscale(num_output_channels=1),
+                    transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+                    transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+                    transforms.ToTensor(),
+                ]
+            )
         else:
             raise ValueError(f"Unknown mode '{self.mode}'. Select a valid origin.")
 
@@ -88,11 +80,13 @@ def main():
   fid = FrechetInceptionDistance(normalize=True, input_img_size=(3, img_size[0], img_size[1])).to(device)
 
     # Update FID incrementally with batched inputs
+  for original_batch in original_loader:
+    fid.update(make3channel(original_batch.to(device)), real=True)
+
+
   for synthetic_batch in synthetic_loader:
       fid.update(make3channel(synthetic_batch.to(device)), real=False)
 
-  for original_batch in original_loader:
-      fid.update(make3channel(original_batch.to(device)), real=True)
 
     # Compute FID score
   fid_result = fid.compute()
