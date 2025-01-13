@@ -5,12 +5,9 @@ from torchvision import transforms
 import torch
 from torchmetrics.image.fid import FrechetInceptionDistance
 from torch.utils.data import DataLoader, Dataset
+import argparse
 
-
-FOLDER_ORIGINAL = '/home/ldrole/migros_deepL/selected_from_brats_1000/Flair'
-FOLDER_SYNTHETIC = '/work/scratch/ldrole/output/test_26_12/12-31_20h21m54s/selora_outputs/loras/test_images'
-MODE = 'brats'
-IMAGE_SIZE = (224, 224)
+DEFAULT_IMAGE_SIZE = (224, 224)
 BATCH_SIZE = 32
 
 
@@ -67,32 +64,43 @@ class ImageDataset(Dataset):
 
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+  parser = argparse.ArgumentParser(description='Computing the FID')
+  parser.add_argument('--orig', type=str, help='Path to the folder containing real data', required=True)
+  parser.add_argument('--syn', type=str, help='Path to the folder containing synthetic data', required=True)
+  parser.add_argument('--imgsize', type=tuple, help='Image size as a tuple (N, M). Default (224,224)', default=DEFAULT_IMAGE_SIZE, nargs='+')
+  parser.add_argument('--mode', type=str, help='Modality associated to different datasets. Default: brats', default='brats', nargs='+')
+  args = parser.parse_args()
+  folder_original = args.orig
+  folder_sythetic = args.syn
+  img_size = args.imgsize
+  mode = args.mode
+
+  device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Prepare datasets and loaders
-    original_dataset = ImageDataset(FOLDER_ORIGINAL, mode=MODE, synthetic=False)
-    synthetic_dataset = ImageDataset(FOLDER_SYNTHETIC, mode=MODE, synthetic=True)
+  original_dataset = ImageDataset(folder_original, mode=mode, synthetic=False)
+  synthetic_dataset = ImageDataset(folder_sythetic, mode=mode, synthetic=True)
 
-    original_loader = DataLoader(original_dataset, batch_size=BATCH_SIZE, shuffle=False)
-    synthetic_loader = DataLoader(synthetic_dataset, batch_size=BATCH_SIZE, shuffle=False)
+  original_loader = DataLoader(original_dataset, batch_size=BATCH_SIZE, shuffle=False)
+  synthetic_loader = DataLoader(synthetic_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     # Initialize FID metric
-    fid = FrechetInceptionDistance(normalize=True, input_img_size=(3, IMAGE_SIZE[0], IMAGE_SIZE[1])).to(device)
+  fid = FrechetInceptionDistance(normalize=True, input_img_size=(3, img_size[0], img_size[1])).to(device)
 
     # Update FID incrementally with batched inputs
-    for synthetic_batch in synthetic_loader:
-        fid.update(make3channel(synthetic_batch.to(device)), real=False)
+  for synthetic_batch in synthetic_loader:
+      fid.update(make3channel(synthetic_batch.to(device)), real=False)
 
-    for original_batch in original_loader:
-        fid.update(make3channel(original_batch.to(device)), real=True)
+  for original_batch in original_loader:
+      fid.update(make3channel(original_batch.to(device)), real=True)
 
     # Compute FID score
-    fid_result = fid.compute()
+  fid_result = fid.compute()
 
     # Output
-    print(f'Original images (real) from: {FOLDER_ORIGINAL}')
-    print(f'Synthetic images (generated) from: {FOLDER_SYNTHETIC}')
-    print(f'FID score: {fid_result.item()}')
+  print(f'Original images (real) from: {folder_original}')
+  print(f'Synthetic images (generated) from: {folder_sythetic}')
+  print(f'FID score: {fid_result.item()}')
 
 
 if __name__ == "__main__":
