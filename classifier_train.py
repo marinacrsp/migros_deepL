@@ -12,7 +12,7 @@ import random
 from PIL import Image
 from classifier_model import build_model
 from classifier_utils import *
-
+from dataset_utils import *
 import sys
 import os
 
@@ -31,36 +31,17 @@ class ImageDataset(Dataset):
         self.root_dir = root_dir
         self.files = df['file_name'].tolist()
         self.labels = df['text'].tolist()
+        self.image_transforms = transforms.Compose(
+            [
 
-        if train:
-            self.image_transforms = transforms.Compose(
-                [
-                    transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                    transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.5], [0.5]),
-                    transforms.RandomRotation(5),
-                    transforms.ColorJitter(brightness=1, contrast=0, saturation=0, hue=0)
-                ]
-            )
-        else: #test data
-            print('No training transformations added')
-            self.image_transforms = transforms.Compose(
-                [
-
-                    transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                    transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.5], [0.5]),
-                ]
-            )
-
-    def add_gaussian_noise(img, mean=0.0, std=1.0):
-        if isinstance(img, torch.Tensor):
-            noise = torch.randn(img.size()) * std + mean
-            return img + noise
-        else:
-            raise TypeError("Input must be a PyTorch tensor.")
+                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+                transforms.ToTensor(),
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2.0)),
+                transforms.Normalize([0.5], [0.5]),
+            ]
+        )
 
     def __len__(self):
         return len(self.files)
@@ -102,17 +83,19 @@ def get_data(data_train, data_test, batch_size=64):
 def check_and_make_folder(path):
     if not os.path.exists(path):
         os.mkdir(path)
+    else:
+        os.rmdir(path)
+        os.mkdir(path)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
-args = parse_args()
-config = load_config(args.config)
+
 
 ############################################################
 # Learning and training parameters.
 # Set seed.
-seed = config['classifier']['seed']
+seed = 42
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
@@ -120,14 +103,64 @@ torch.backends.cudnn.benchmark = True
 np.random.seed(seed)
 random.seed(seed)
 
-epochs = config["classifier"]["training"]["n_epochs"]
-batch_size = config["classifier"]["training"]["batch_size"]
-learning_rate = config["classifier"]["training"]["lr"]
+###############################################################################################
+#### Parser arguments
+###############################################################################################
+parser = argparse.ArgumentParser(description='Computing the AUC')
+parser.add_argument('--main', type=str, help='Path to the main folder, brats/ picai', required=True)
+parser.add_argument('--test', type=str, help='Path to the folder containing real data for testing', required=True)
+parser.add_argument('--train', type=str, help='Path to the folder containing real data for training', required=True)
+parser.add_argument('--syn', type=str, help='Path to the folder containing synthetic data to be appended to the train', required=True)
+parser.add_argument('--merge', type=str, help='Specify whether to augment training data(1) or not(0)', required=True)
+parser.add_argument('--epochs', type=str, help='N# of training epochs', required=False)
+parser.add_argument('--batch_size', type=str, help='Size of training batch', required=False)
+parser.add_argument('--lr', type=str, help='Learning rate', required=False)
+args = parser.parse_args()
 
-dataset_train = config['classifier']['dataset']['data_train']
-dataset_test = config['classifier']['dataset']['data_test']
 
-train_loader, test_loader = get_data(dataset_train, dataset_test, batch_size=batch_size)
+main_path = args.main
+dataset_train_path = main_path + args.train
+dataset_test_path = main_path + args.test
+dataset_generated_path = main_path + args.syn
+merge = args.merge
+
+
+if args.epochs == None:
+    epochs= 50
+if args.batch_size == None:
+    batch_size = 32
+if args.lr == None:
+    learning_rate = 1.e-4
+
+
+print(f'Inputted Variables: synthetic:{dataset_generated_path}, test:{dataset_test_path}, train:{dataset_train_path}, \n merge: {merge} ')
+
+if merge == 'True':
+    folder_merged = main_path + 'merged_output_' + dataset_generated_path
+    # Replace with the path to the destination folder TODO
+    # # Create the destination folder if it doesn't exist
+    if os.path.exists(folder_merged):
+        # Remove the folder and its contents
+        shutil.rmtree(folder_merged)
+
+    os.makedirs(folder_merged)
+    # # Copy images from both folders to the destination images folder
+    copy_images_source2target(dataset_generated_path, folder_merged)
+    copy_images_source2target(dataset_train_path, folder_merged)
+
+    # Combine metadata from both folders into single excel sheet
+    combined_metadata_path = os.path.join(folder_merged, "metadata.csv")
+    combine_metadata(dataset_generated_path, dataset_train_path, combined_metadata_path)
+
+
+    train_loader, test_loader = get_data(folder_merged, dataset_test_path, batch_size=batch_size)
+    print(f'name merged: {folder_merged}')
+    print(len(train_loader))
+elif merge == 'False':
+    train_loader, test_loader = get_data(dataset_train_path, dataset_test_path, batch_size=batch_size)
+
+
+
 print('________________________________________________________________')
 
 ###########################################################
