@@ -1,21 +1,59 @@
-# MIGROS Budget: Medical Image Generation, Retraining on a Strict Bufget
+## MIGROS Budget: Medical Image Generation, Retraining on a Strict Budget
 
 This is the repository for the project for the DL course.
-Authors: Luca Ansceschi, Marina Crespo Aguirre, Luca Drole
+Authors: Luca Anceschi, Marina Crespo Aguirre, Luca Drole
 
 ## Table of Contents
 
 - [Introduction](#introduction)
 - [Installation](#installation)
+- [Datasets](#datasets)
 - [Usage](#usage)
-- [Computing the FID](#Computing the FID)
+- [Computing the FID](#computing-the-fid)
 - [Example](#example)
 
 ## Introduction
 
 # Training
 
-## Training SeLORA
+## Training SeLoRA
+The original implementation for the SeLoRA training was made available by Mao et al. 2024 at this [repository](https://anonymous.4open.science/r/SeLoRA-980D). However, this was only used as a base and many changes were made to adapt it to the needs of the project.
+
+To train the SeLoRA make use of the finetuning script: 
+```bash
+    python selora_finetuning.py
+```
+while making sure to have a config.yaml set up with the following structure: LOOK AGAIN
+```bash
+test:
+  unet_path: # path where to save the fine tuned unet
+  txt_encoder_path: # path where to save the fine tuned text encoder
+  imgs_folder:  # path where to save the generated images (I THINK WE DONT USE)
+
+output:
+  path: # output path
+  folder_name: /selora_outputs
+  folder_lora_name: /loras
+
+dataset:
+  main_path: # main path to the dataset 
+  dataset_name: # specific subfolder
+  sequence_type: # modality (i.e. subsubfolder)
+  report_name: # name of the report (settled on metadata.csv)
+  prompts_for_generation: # full path to a .csv file with same structure as report_name, used to generate the images after training
+  
+
+default_random_seed: # random seed used 
+batch_size: # batch size
+lr: # learning rate
+epochs: # number of epochs
+th: 10000.0 # lamda value used for the expansion of the LoRA rank
+
+model:
+  model_id: runwayml/stable-diffusion-v1-5 # model 
+```
+
+After generating the images, some simple post processing (background removal) was done. This was used to correct for issues in background not being homogenous and black (used only for the brain images generated from BraTS). This can be replicated with the postprocess_generated_brats.ipynb notebook.
 
 ## Training StyleGAN
 We use a StyleGAN3 as our baseline. We refer to the [original repository](https://github.com/NVlabs/stylegan3) for further details.
@@ -41,14 +79,24 @@ We use a StyleGAN3 as our baseline. We refer to the [original repository](https:
     Here you can specify any range of seeds to generate the corresponding number of images.
 Notice how in this case, one needs to train 2 different models, one for cancer-negative images and one for cancer-positive images.
 
-# Computig the FID
-The Frechet Inception Distance is a metric used to assess the quality of generated images. To compute the FID you will need a test dataset containing real images and a 
-synthetic dataset. Then, you can run:
+# Computing the FID
+The Frechet Inception Distance is a metric used to assess the quality of generated images. To compute the FID you will need a test dataset containing real images and a synthetic dataset. Then, you can run:
 
 ```bash
 python compute_fid.py --orig /path/to/original --syn /path/to/synthetic
 ```
 
+# Datasets
+For this projects, two publicly available datasets were used.
+
+1. BraTS2021: Brain Tumor Segmentation 2021 Challenge dataset 
+Dataset available at [link](https://www.kaggle.com/datasets/dschettler8845/brats-2021-task1)
+
+2. PI-CAI: Prostate Imaging: Cancer AI challenge 
+Dataset available at [link](https://zenodo.org/records/6624726)
+Labels available at the following [GitHub](https://github.com/DIAGNijmegen/picai_labels/tree/main), for this project only the expert reviewed annotations were used (found under /csPCa_lesion_delineations/human_expert/resampled).
+
+Minor pre-processing has been done with two notebooks (preprocess_data_brats.ipynb and preprocess_data_picai.ipynb). The datasets were processed to extract 2D slices and a metadata.csv document produced that maps every available image with a textual prompt to use for the textual inversion part of the diffusion model. The pre processed datasets are made available for convenience: the ones used for training can be found at FOLDERSNAME, while the testing sets are available under FOLDERSNAME.
 
 # FROM HERE ON IT'S CRAP
 ## Installation
