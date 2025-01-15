@@ -81,6 +81,13 @@ def text2binary(metadata_path):
     # print(matadata)
     df.to_csv(metadata_path, index=False)
     
+def copy_images_source2target(folder_source, destination_folder):
+    for filename in os.listdir(folder_source):
+        source_path = os.path.join(folder_source, filename)
+        target_path = os.path.join(destination_folder, filename)
+        shutil.copy2(source_path, target_path)  # Copy the image file
+
+        
 # Combine metadata.csv files from both folders
 def combine_metadata(folder1, folder2, output_file):
     metadata1 = os.path.join(folder1, "metadata.csv")
