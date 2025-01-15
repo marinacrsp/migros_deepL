@@ -13,7 +13,11 @@ Authors: Luca Ansceschi, Marina Crespo Aguirre, Luca Drole
 
 ## Introduction
 
-# Training StyleGAN
+# Training
+
+## Training SeLORA
+
+## Training StyleGAN
 We use a StyleGAN3 as our baseline. We refer to the [original repository](https://github.com/NVlabs/stylegan3) for further details. To train the StyleGAN, first clone the repository:
 ```bash
 !git clone https://github.com/NVlabs/stylegan3.git
