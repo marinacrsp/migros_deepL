@@ -96,7 +96,7 @@ Dataset available at [link](https://www.kaggle.com/datasets/dschettler8845/brats
 Dataset available at [link](https://zenodo.org/records/6624726)
 Labels available at the following [GitHub](https://github.com/DIAGNijmegen/picai_labels/tree/main), for this project only the expert reviewed annotations were used (found under /csPCa_lesion_delineations/human_expert/resampled).
 
-Minor pre-processing has been done with two notebooks (preprocess_data_brats.ipynb and preprocess_data_picai.ipynb). The datasets were processed to extract 2D slices and a metadata.csv document produced that maps every available image with a textual prompt to use for the textual inversion part of the diffusion model. The pre processed datasets are made available for convenience: the ones used for training can be found at FOLDERSNAME, while the testing sets are available under FOLDERSNAME.
+Minor pre-processing has been done with two notebooks (preprocess_data_brats.ipynb and preprocess_data_picai.ipynb). The datasets were processed to extract 2D slices and a metadata.csv document produced that maps every available image with a textual prompt to use for the textual inversion part of the diffusion model. The pre processed datasets are made available for convenience in folder '/Datasets/BraTS' and '/Datasets/PICAI'. Each folder than contain the training and testing set used.
 
 # FROM HERE ON IT'S CRAP
 ## Installation
