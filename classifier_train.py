@@ -127,16 +127,24 @@ merge = args.merge
 
 if args.epochs == None:
     epochs= 50
+else:
+    epochs = int(args.epochs)
+
 if args.batch_size == None:
     batch_size = 32
+else:
+    batch_size = int(args.batch_size)
+
 if args.lr == None:
     learning_rate = 1.e-4
+else:
+    learning_rate = float(args.lr)
 
 
 print(f'Inputted Variables: synthetic:{dataset_generated_path}, test:{dataset_test_path}, train:{dataset_train_path}, \n merge: {merge} ')
 
 if merge == 'True':
-    folder_merged = main_path + 'merged_output_' + dataset_generated_path
+    folder_merged = main_path + 'merged_output_' + args.syn
     # Replace with the path to the destination folder TODO
     # # Create the destination folder if it doesn't exist
     if os.path.exists(folder_merged):
@@ -209,7 +217,7 @@ if __name__ == "__main__":
     print('Initiate testing')
     # Save the loss and accuracy plots.
     
-    test_loss, test_accuracy, predictions, groundtruth = test(
+    test_loss, test_accuracy, predictions, groundtruth, auc_score = test(
         model, 
         test_loader, 
         criterion, 
@@ -219,4 +227,4 @@ if __name__ == "__main__":
     print('_________________________________________')
     print(groundtruth)
     
-    print(f'Final values from test: \ntest error:{test_loss:.3f}, \ntest accuracy: {test_accuracy:.3f}')
+    print(f'Final values from test: \ntest error:{test_loss:.3f}, \ntest accuracy: {test_accuracy:.3f}, \n AUC score: {auc_score}')

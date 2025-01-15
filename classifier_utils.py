@@ -2,12 +2,16 @@ import matplotlib.pyplot as plt
 import os
 import torch
 from tqdm import tqdm
+from torcheval.metrics.aggregation.auc import AUC 
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision.transforms import ToTensor
-
+from torch import nn
+from sklearn import metrics
+import numpy as np
 plt.style.use("ggplot")
-
+compute_auc = AUC()
+softmax = nn.Softmax(dim=1)
 # Training function.
 def train(model, trainloader, optimizer, criterion, device):
     model.train()
@@ -30,7 +34,9 @@ def train(model, trainloader, optimizer, criterion, device):
         train_running_loss += loss.item()
         # Calculate the accuracy.
         _, preds = torch.max(outputs.data, 1)
+        
         train_running_correct += (preds == labels).sum().item()
+
         # Backpropagation
         loss.backward()
         # Update the weights.
@@ -50,6 +56,7 @@ def test(model, testloader, criterion, device):
     counter = 0
     predictions = []
     gt = []
+    auc_scores = []
     for i, data in tqdm(enumerate(testloader), total=len(testloader)):
         counter += 1
         image = data['instance_images']
@@ -64,15 +71,24 @@ def test(model, testloader, criterion, device):
         test_running_loss += loss.item()
         # Calculate the accuracy.
         _, preds = torch.max(outputs.data, 1)
-        test_running_correct += (preds == labels).sum().item() # TP + TN
+
+        y_probabilities = softmax(outputs.data)
+        print(y_probabilities)
+        y_preds = y_probabilities[:,1]
+        print(y_preds)
         
+        fpr, tpr, _ = metrics.roc_curve(labels.cpu(), y_preds.cpu())
+        auc_scores.append(metrics.auc(fpr, tpr))
+
+        test_running_correct += (preds == labels).sum().item() # TP + TN
         predictions.append(preds)
         gt.append(labels)
+
     # Loss and accuracy for the complete epoch.
     final_loss = test_running_loss / counter
     # epoch_acc = 100. * (train_running_correct / len(trainloader.dataset))
     final_accuracy = 100.0 * (test_running_correct / len(testloader.dataset))
-    return final_loss, final_accuracy, predictions, gt
+    return final_loss, final_accuracy, predictions, gt, np.mean(auc_scores)
 
 # Validation function.
 def validate(model, testloader, criterion, device):
