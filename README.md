@@ -20,16 +20,16 @@ Authors: Luca Ansceschi, Marina Crespo Aguirre, Luca Drole
 ## Training StyleGAN
 We use a StyleGAN3 as our baseline. We refer to the [original repository](https://github.com/NVlabs/stylegan3) for further details. To train the StyleGAN, first clone the repository:
 ```bash
-!git clone https://github.com/NVlabs/stylegan3.git
+git clone https://github.com/NVlabs/stylegan3.git
 ```
 Then, you will have to pre-process the data
 ```bash
-!python dataset_tool.py --source= /path/to/source --dest= path/to/postprocessed_dataset --resolution=256x256
+python dataset_tool.py --source= /path/to/source --dest= path/to/postprocessed_dataset --resolution=256x256
 ```
 Now, you can train the StyleGAN. You can regulate the number of iterations with the `kimg` paramter
 
 ```bash
-!python train.py --outdir= /path/to/output_directory --cfg=stylegan3-t --data=path/to/postprocessed_dataset \
+python train.py --outdir= /path/to/output_directory --cfg=stylegan3-t --data=path/to/postprocessed_dataset \
     --gpus=1 --batch=3 --gamma=2 --mirror=1 --kimg=25 --snap=6 \
     --resume=https://api.ngc.nvidia.com/v2/models/nvidia/research/stylegan3/versions/1/files/stylegan3-t-ffhqu-256x256.pkl \
     --tick=1 --mbstd-group 1 --metrics none --cbase=16384
@@ -37,7 +37,7 @@ Now, you can train the StyleGAN. You can regulate the number of iterations with 
 Finally, you can perform inference like this:
 
 ```bash
-!python gen_images.py --outdir=/path/to/output_directory --seeds=0-10  --network= /path/to/model
+python gen_images.py --outdir=/path/to/output_directory --seeds=0-10  --network= /path/to/model
 ```
 Here you can specify any range of seeds to generate the corresponding number of images.
 Notice how in this case, one needs to train 2 different models, one for cancer-negative images and one for cancer-positive images.
