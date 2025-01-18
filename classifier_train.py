@@ -10,30 +10,20 @@ import numpy as np
 import pandas as pd
 import random
 from PIL import Image
-from classifier_model import build_model
 from classifier_utils import *
 from dataset_utils import *
 import sys
 import os
-
-# Get the absolute path to the 'config' folder
-big_folder_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "/.."))
-config_path = os.path.join(big_folder_path, "config", "config_utils.py")
-# Add the 'config' folder to the Python module search path
-sys.path.append(config_path)
-from config.config_utils import *
-
-
+import pandas as pd
 
 
 class ImageDataset(Dataset):
     def __init__(self, root_dir, df, size = 224, center_crop = True, train=True):
         self.root_dir = root_dir
         self.files = df['file_name'].tolist()
-        self.labels = df['text'].tolist()
+        self.labels = df['text'].tolist() 
         self.image_transforms = transforms.Compose(
             [
-
                 transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
                 transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
                 transforms.ToTensor(),
@@ -59,19 +49,24 @@ class ImageDataset(Dataset):
 
 def get_data(data_train, data_test, batch_size=64):
     # CIFAR10 training dataset.
-    metadata_train = pd.read_csv(data_train + 'metadata.csv')
-    metadata_test = pd.read_csv(data_test + 'metadata.csv')
-    print(f'\nTrain set: {len(metadata_train)}, \nTest set: {len(metadata_test)}')
+    
+    metadata_train = pd.read_csv(data_train + '/metadata.csv')
+    # if merge is true this is already done dealt with using the dataset utils, when the merged folder is created the csv is already adapted
+    if merge == False:
+        metadata_train['text'] = metadata_train['text'].apply(lambda x: 0 if 'healthy' in str(x).lower() else 1) # convert prompts to binary labels
+
+    metadata_test = pd.read_csv(data_test + '/metadata.csv')
+    metadata_test['text'] = metadata_test['text'].apply(lambda x: 0 if 'healthy' in str(x).lower() else 1) # convert prompts to binary labels
+    
+    print(f'\nTrain set size: {len(metadata_train)}, \nTest set size: {len(metadata_test)}')
 
     dataset_train = ImageDataset(
     root_dir=data_train,
-    df=metadata_train,
-    train =False,
-)
+    df=metadata_train
+    )
     dataset_test = ImageDataset(
     root_dir=data_test,
-    df=metadata_test,
-    train=False,
+    df=metadata_test
     )
 
     # Create data loaders.
@@ -87,15 +82,36 @@ def check_and_make_folder(path):
         os.rmdir(path)
         os.mkdir(path)
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+###############################################################################################
+#### Parser arguments
+###############################################################################################
+parser = argparse.ArgumentParser(description='Computing the AUC')
+parser.add_argument('--test', type=str, help='Path to the folder containing real data for testing', required=True)
+parser.add_argument('--train', type=str, help='Path to the folder containing real data for training', required=True)
+parser.add_argument('--syn', type=str, help='Path to the folder containing synthetic data to be appended to the train', required=True)
+parser.add_argument('--merge', type=bool, help='Specify whether to augment training data (i.e. use the syn argument or not)', required=True)
+parser.add_argument('--merge_path', type=str, help='Path to where the merged train+synthetic folder is gonna be created (if merge=True)', required=True)
+parser.add_argument('--epochs', type=int, help='N# of training epochs', required=False, default = 50)
+parser.add_argument('--batch_size', type=int, help='Size of training batch', required=False, default = 32)
+parser.add_argument('--lr', type=float, help='Learning rate', required=False, default = 1e-4)
+parser.add_argument('--seed', type=int, help='Random seed', required=False, default = 21)
+parser.add_argument('--verbose', type=bool, help='Set to true if additional information should be print along the process', required=False, default = True)
+args = parser.parse_args()
 
 
+dataset_train_path = args.train
+dataset_test_path = args.test
+dataset_generated_path = args.syn 
+merge_path = args.merge_path
+merge = args.merge
+epochs = args.epochs
+batch_size = args.batch_size
+learning_rate = args.lr
+verbose = args.verbose
 
-
-############################################################
-# Learning and training parameters.
-# Set seed.
-seed = 42
+seed = args.seed
+if verbose:
+    print('Random Seed Used: ', seed)
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
@@ -103,49 +119,15 @@ torch.backends.cudnn.benchmark = True
 np.random.seed(seed)
 random.seed(seed)
 
-###############################################################################################
-#### Parser arguments
-###############################################################################################
-parser = argparse.ArgumentParser(description='Computing the AUC')
-parser.add_argument('--main', type=str, help='Path to the main folder, brats/ picai', required=True)
-parser.add_argument('--test', type=str, help='Path to the folder containing real data for testing', required=True)
-parser.add_argument('--train', type=str, help='Path to the folder containing real data for training', required=True)
-parser.add_argument('--syn', type=str, help='Path to the folder containing synthetic data to be appended to the train', required=True)
-parser.add_argument('--merge', type=str, help='Specify whether to augment training data(1) or not(0)', required=True)
-parser.add_argument('--epochs', type=str, help='N# of training epochs', required=False)
-parser.add_argument('--batch_size', type=str, help='Size of training batch', required=False)
-parser.add_argument('--lr', type=str, help='Learning rate', required=False)
-args = parser.parse_args()
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+if verbose:
+    print('DEVICE: ', device)
 
+if verbose:
+    print('ARGS: ', args)
 
-main_path = args.main
-dataset_train_path = main_path + args.train
-dataset_test_path = main_path + args.test
-dataset_generated_path = main_path + args.syn
-merge = args.merge
-
-
-if args.epochs == None:
-    epochs= 50
-else:
-    epochs = int(args.epochs)
-
-if args.batch_size == None:
-    batch_size = 32
-else:
-    batch_size = int(args.batch_size)
-
-if args.lr == None:
-    learning_rate = 1.e-4
-else:
-    learning_rate = float(args.lr)
-
-
-print(f'Inputted Variables: synthetic:{dataset_generated_path}, test:{dataset_test_path}, train:{dataset_train_path}, \n merge: {merge} ')
-
-if merge == 'True':
-    folder_merged = main_path + 'merged_output_' + args.syn
-    # Replace with the path to the destination folder TODO
+if merge:
+    folder_merged = merge_path + 'merged_output_'
     # # Create the destination folder if it doesn't exist
     if os.path.exists(folder_merged):
         # Remove the folder and its contents
@@ -160,23 +142,25 @@ if merge == 'True':
     combined_metadata_path = os.path.join(folder_merged, "metadata.csv")
     combine_metadata(dataset_generated_path, dataset_train_path, combined_metadata_path)
 
-
     train_loader, test_loader = get_data(folder_merged, dataset_test_path, batch_size=batch_size)
-    print(f'name merged: {folder_merged}')
-    print(len(train_loader))
-elif merge == 'False':
+    if verbose:
+        print(f'name merged: {folder_merged}')
+        print(len(train_loader))
+    
+else:
     train_loader, test_loader = get_data(dataset_train_path, dataset_test_path, batch_size=batch_size)
 
 
-
 print('________________________________________________________________')
+
 
 ###########################################################
 # Define model based on the argument parser string.
 print("\n[INFO]: Training the Torchvision ResNet18 model...")
 model = build_model(pretrained=True, fine_tune=True, num_classes=2).to(device)
 
-print(model)
+if verbose:
+    print(model)
 
 #####################################################
 # Optimizer.
@@ -215,7 +199,6 @@ if __name__ == "__main__":
     # save_plots(train_acc, valid_acc, train_loss, valid_loss, plot_folder)
     print("TRAINING COMPLETE")
     print('Initiate testing')
-    # Save the loss and accuracy plots.
     
     test_loss, test_accuracy, predictions, groundtruth, auc_score = test(
         model, 
@@ -225,6 +208,6 @@ if __name__ == "__main__":
         )
     
     print('_________________________________________')
-    print(groundtruth)
+    #print(groundtruth)
     
     print(f'Final values from test: \ntest error:{test_loss:.3f}, \ntest accuracy: {test_accuracy:.3f}, \n AUC score: {auc_score}')

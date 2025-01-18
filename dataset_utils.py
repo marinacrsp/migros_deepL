@@ -2,7 +2,6 @@ import os, shutil
 import pandas as pd
 import numpy as np
 
-
 ######################## PRE-PROCESSING ########################
 
 def get_tumor_mask(segmentation_mask):
@@ -67,19 +66,6 @@ def copy_images(file_names, target_dir, image_folder):
             print(f"Warning: {src_path} does not exist.")
 
 ######################## POST-PROCESSING ########################
-
-def text2binary(metadata_path):
-
-    # Read the Excel file into a DataFrame
-    df = pd.read_csv(metadata_path)
-
-    # Replace text in the specified column
-    df['text'] = df['text'].apply(
-        lambda x: 0 if isinstance(x, str) and 'healthy' in x.lower() else 1
-    )
-    # Display the data
-    # print(matadata)
-    df.to_csv(metadata_path, index=False)
     
 def copy_images_source2target(folder_source, destination_folder):
     for filename in os.listdir(folder_source):
@@ -96,6 +82,11 @@ def combine_metadata(folder1, folder2, output_file):
     # Load metadata from both folders
     df1 = pd.read_csv(metadata1) if os.path.exists(metadata1) else pd.DataFrame()
     df2 = pd.read_csv(metadata2) if os.path.exists(metadata2) else pd.DataFrame()
+    df1['text'] = df1['text'].apply(lambda x: 0 if 'healthy' in str(x).lower() else 1) # convert prompts to binary labels
+    df2['text'] = df2['text'].apply(lambda x: 0 if 'healthy' in str(x).lower() else 1)
+    
+    #print('DF SIZES: ', df1.shape, df2.shape)
+    
     if 'text' in df1.columns:
         df1['text'] = df1['text'].fillna(0).astype(int)  # Handle NaNs and ensure integers
     if 'text' in df2.columns:
