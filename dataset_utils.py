@@ -1,6 +1,7 @@
-import os, shutil
+import os
 import pandas as pd
 import numpy as np
+import shutil
 
 ######################## PRE-PROCESSING ########################
 
@@ -65,7 +66,7 @@ def copy_images(file_names, target_dir, image_folder):
         else:
             print(f"Warning: {src_path} does not exist.")
 
-######################## POST-PROCESSING ########################
+######################## POST-PROCESSING AND METRICS ########################
     
 def copy_images_source2target(folder_source, destination_folder):
     for filename in os.listdir(folder_source):

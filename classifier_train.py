@@ -10,11 +10,12 @@ import numpy as np
 import pandas as pd
 import random
 from PIL import Image
-from classifier_utils import *
-from dataset_utils import *
+import classifier_utils as cu
+import dataset_utils as du
 import sys
 import os
 import pandas as pd
+import shutil
 
 
 class ImageDataset(Dataset):
@@ -22,16 +23,19 @@ class ImageDataset(Dataset):
         self.root_dir = root_dir
         self.files = df['file_name'].tolist()
         self.labels = df['text'].tolist() 
-        self.image_transforms = transforms.Compose(
-            [
-                transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
-                transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
-                transforms.ToTensor(),
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2.0)),
-                transforms.Normalize([0.5], [0.5]),
-            ]
-        )
+        
+        transforms_list = [
+            transforms.Resize(size, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.CenterCrop(size) if center_crop else transforms.RandomCrop(size),
+            transforms.ToTensor(),
+            transforms.Normalize([0.5], [0.5]),
+        ]
+        # Additional transformations for training
+        if train:
+            transforms_list.insert(3, transforms.RandomHorizontalFlip(p=0.5))
+            transforms_list.insert(4, transforms.GaussianBlur(kernel_size=(5, 9), sigma=(0.1, 2.0)))
+
+        self.image_transforms = transforms.Compose(transforms_list)
 
     def __len__(self):
         return len(self.files)
@@ -126,64 +130,62 @@ if verbose:
 if verbose:
     print('ARGS: ', args)
 
-if merge:
-    folder_merged = merge_path + 'merged_output_'
-    # # Create the destination folder if it doesn't exist
-    if os.path.exists(folder_merged):
-        # Remove the folder and its contents
-        shutil.rmtree(folder_merged)
-
-    os.makedirs(folder_merged)
-    # # Copy images from both folders to the destination images folder
-    copy_images_source2target(dataset_generated_path, folder_merged)
-    copy_images_source2target(dataset_train_path, folder_merged)
-
-    # Combine metadata from both folders into single excel sheet
-    combined_metadata_path = os.path.join(folder_merged, "metadata.csv")
-    combine_metadata(dataset_generated_path, dataset_train_path, combined_metadata_path)
-
-    train_loader, test_loader = get_data(folder_merged, dataset_test_path, batch_size=batch_size)
-    if verbose:
-        print(f'name merged: {folder_merged}')
-        print(len(train_loader))
-    
-else:
-    train_loader, test_loader = get_data(dataset_train_path, dataset_test_path, batch_size=batch_size)
-
-
-print('________________________________________________________________')
-
-
-###########################################################
-# Define model based on the argument parser string.
-print("\n[INFO]: Training the Torchvision ResNet18 model...")
-model = build_model(pretrained=True, fine_tune=True, num_classes=2).to(device)
-
-if verbose:
-    print(model)
-
-#####################################################
-# Optimizer.
-optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-# Loss function.
-criterion = nn.CrossEntropyLoss()
-
-########################################################
-# Total parameters and trainable parameters.
-total_params = sum(p.numel() for p in model.parameters())
-print(f"{total_params:,} total parameters.")
-total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(f"{total_trainable_params:,} training parameters.")
-
 
 if __name__ == "__main__":
-    # Lists to keep track of losses and accuracies.
-    train_loss, valid_loss = [], []
-    train_acc, valid_acc = [], []
+    # First combine training data + synthetic if needed
+    if merge:
+        folder_merged = merge_path + 'merged_output_'
+        # # Create the destination folder if it doesn't exist
+        if os.path.exists(folder_merged):
+            # Remove the folder and its contents
+            shutil.rmtree(folder_merged)
+
+        os.makedirs(folder_merged)
+        # # Copy images from both folders to the destination images folder
+        du.copy_images_source2target(dataset_generated_path, folder_merged)
+        du.copy_images_source2target(dataset_train_path, folder_merged)
+
+        # Combine metadata from both folders into single excel sheet
+        combined_metadata_path = os.path.join(folder_merged, "metadata.csv")
+        du.combine_metadata(dataset_generated_path, dataset_train_path, combined_metadata_path)
+
+        train_loader, test_loader = get_data(folder_merged, dataset_test_path, batch_size=batch_size)
+        if verbose:
+            print(f'name merged: {folder_merged}')
+            print(len(train_loader))
+    else:
+        train_loader, test_loader = get_data(dataset_train_path, dataset_test_path, batch_size=batch_size)
+
+
+    print('________________________________________________________________')
+
+
+    ###########################################################
+    # Define model based on the argument parser string.
+    print("\n[INFO]: Training the Torchvision ResNet18 model...")
+    model = cu.build_model(pretrained=True, fine_tune=True, num_classes=2).to(device)
+
+    if verbose:
+        print(model)
+
+    #####################################################
+    # Optimizer.
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    # Loss function.
+    criterion = nn.CrossEntropyLoss()
+
+    ########################################################
+    # Total parameters and trainable parameters.
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"{total_params:,} total parameters.")
+    total_trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"{total_trainable_params:,} training parameters.")
+    
+    
     # Start the training.
     for epoch in range(epochs):
         print(f"[INFO]: Epoch {epoch+1} of {epochs}")
-        train_epoch_loss, train_epoch_acc = train(
+        train_epoch_loss, train_epoch_acc = cu.train(
             model, 
             train_loader, 
             optimizer, 
@@ -196,11 +198,10 @@ if __name__ == "__main__":
         )
         print("-" * 50)
     
-    # save_plots(train_acc, valid_acc, train_loss, valid_loss, plot_folder)
     print("TRAINING COMPLETE")
     print('Initiate testing')
     
-    test_loss, test_accuracy, predictions, groundtruth, auc_score = test(
+    test_loss, test_accuracy, predictions, groundtruth, auc_score = cu.test(
         model, 
         test_loader, 
         criterion, 
